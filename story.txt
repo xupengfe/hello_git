@@ -1,0 +1,2 @@
+#story.txt
+#1st file test
