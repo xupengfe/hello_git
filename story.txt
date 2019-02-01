@@ -1,3 +1,0 @@
-#story.txt
-#1st file test
-#xpf edit story
