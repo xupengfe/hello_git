@@ -23,7 +23,7 @@ void main(void)
 	asm volatile("movabsq $0x0011223344556677, %rax");
 	asm volatile("movl $-1, %eax");
 	asm("movq %%rax,%0" : "=r"(addr_rax));
-	printf("After movq $-1, eax;  addr_rax:%p, &addr_rax:%p\n\n",
+	printf("After movl $-1, eax;  addr_rax:%p, &addr_rax:%p\n\n",
 		addr_rax, &addr_rax);
 
 	asm volatile("movabsq $0x0011223344556677, %rax");
