@@ -1,4 +1,4 @@
-BIN = ax
+BIN = ax cpuid cpu_feature
 
 all: $(BIN)
 
