@@ -170,6 +170,7 @@ void main(void)
 	print_mem(&xsv, sizeof(struct xsave_struct));
 	printf("i387 size:%ld\n", sizeof(struct i387_fxsave_struct));
 	printf("xsave header size:%ld\n", sizeof(struct xsave_hdr_struct));
+	print_mem(&(xsv.xsave_hdr), sizeof(struct xsave_hdr_struct));
 	printf("ymmh_struct size:%ld\n", sizeof(struct ymmh_struct));
 	printf("lwp_struct size:%ld\n", sizeof(struct lwp_struct));
 	printf("bndregs_struct size:%ld\n", sizeof(struct bndregs_struct));
