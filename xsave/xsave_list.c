@@ -1,3 +1,16 @@
+// SPDX-License-Identifier: GPL-2.0-or-later
+/*
+ * xsave_list.c
+ * Copyright (C) 2019 Intel Corporation
+ * Author: Pengfei, Xu <pengfei.xu@intel.com>
+ */
+
+/*
+ * It's for CPU XSAVE tests, which could verify CPU support XSAVE
+ * instruction or not, and check all support XSAVE features
+ *
+ */
+
 #include <stdio.h>
 #include <string.h>
 #include <stdint.h>
