@@ -1,3 +1,9 @@
+// SPDX-License-Identifier: GPL-2.0-or-later
+/*
+ * xsave_list.h
+ * Copyright (C) 2019 Intel Corporation
+ * Author: Pengfei, Xu <pengfei.xu@intel.com>
+ */
 
 typedef uint8_t u8;
 typedef uint16_t u16;
