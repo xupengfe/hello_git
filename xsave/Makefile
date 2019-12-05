@@ -1,4 +1,4 @@
-BIN = xsave
+BIN = xsave xsave_list
 
 all: $(BIN)
 
