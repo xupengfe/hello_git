@@ -93,7 +93,7 @@ static unsigned int get_xfeature_size(int ecx)
 	return eax;
 }
 
-static void print_xstate_feature(u64 xstate_mask)
+static void print_xstate_feature(u32 xstate_mask)
 {
 	const char *feature_name;
 	int xfeature_size=0, is_aligned=0;
@@ -108,15 +108,15 @@ static void print_xstate_feature(u64 xstate_mask)
 	else
 		xfeature_size=get_xfeature_size(xstate_mask);
 
-	printf("CPU support XSAVE feature 0x%05lx| %04d |   %d   |'%s'\n",
+	printf("CPU support XSAVE feature 0x%05x| %04d |   %d   |'%s'\n",
 		xstate_mask, xfeature_size, is_aligned, feature_name);
 	linux_xsave_size=linux_xsave_size+xfeature_size;
 }
 
 int cpu_support_xstate_list(void)
 {
-	unsigned int eax, ebx, ecx, edx, bit_check=0x4000000;
-	unsigned long i=0;
+	unsigned int eax, ebx, ecx, edx, bit_check=0x4000000, i=0;
+
 	u64 xfeatures_mask_all;
 
 	// Verify this CPU could support XSAVE instructions
@@ -146,9 +146,10 @@ int cpu_support_xstate_list(void)
 			continue;
 		print_xstate_feature(i);
 	}
+	return 0;
 }
 
-void main(void)
+int main(void)
 {
 	unsigned int eax, ebx, ecx, edx, cpu_xsave_size;
 
@@ -162,4 +163,5 @@ void main(void)
 		printf("WARN: cpu_xsave_size:%d is not equal to linux_xsave_size:%d\n",
 			cpu_xsave_size, linux_xsave_size);
 	xstate_dump_leaves();
+	return 0;
 }
