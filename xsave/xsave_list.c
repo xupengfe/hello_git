@@ -167,19 +167,16 @@ int main(void)
 	unsigned int eax, ebx, ecx, edx, cpu_xsave_size, cpu_max_xsave_size;
 
 	cpuid_count(XSTATE_CPUID, 1, &eax, &ebx, &ecx, &edx);
-	printf("This CPU could support XSAVE features total size:%d(0x%x)\n",
-		ebx, ebx);
 	cpu_xsave_size=ebx;
 
 	cpuid_count(XSTATE_CPUID, 0, &eax, &ebx, &ecx, &edx);
 	cpu_max_xsave_size=ebx;
 
+	printf("This CPU could support XSAVE features total size:%d(0x%x), max:0d%d\n",
+		cpu_xsave_size, cpu_xsave_size, cpu_max_xsave_size);
 	cpu_support_xstate_list();
 	if(cpu_xsave_size != linux_xsave_size)
 		printf("WARN: cpu_xsave_size:%d is not equal to linux_xsave_size:%d, max:%d\n",
-			cpu_xsave_size, linux_xsave_size, cpu_max_xsave_size);
-	else
-		printf("cpu_xsave_size:%d, linux_xsave_size:%d, cpu_max:%d\n",
 			cpu_xsave_size, linux_xsave_size, cpu_max_xsave_size);
 	xstate_dump_leaves();
 	return 0;
