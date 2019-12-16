@@ -133,6 +133,20 @@ static inline void copy_fxregs_to_kernel(struct fxregs_state *fxsave)
 	asm volatile( "fxsaveq %[fx]" : [fx] "=m" (*fxsave));
 }
 
+static inline void xgetbv(unsigned int *eax, unsigned int *ebx,
+	unsigned int *ecx, unsigned int *edx)
+{
+	printf("xgetbv try\n");
+	asm volatile( "xgetbv"
+		: "=a"(*eax),
+		"=b" (*ebx),
+		"=c" (*ecx),
+		"=d" (*edx)
+		:"2" (*ecx)
+		: "memory");
+	printf("xgetbv done\n");
+}
+
 void print_mem(void const *vp, size_t n)
 {
 	unsigned char const *p = vp;
@@ -148,6 +162,7 @@ void main(void)
 {
 	struct fxregs_state *fxsave;
 	struct xsave_struct xsv;
+	unsigned int eax = 0, ebx = 0, ecx = 0, edx = 0;
 
 	// init fxsave and xsv
 	fxsave = (struct fxregs_state*)malloc(sizeof(struct fxregs_state));
@@ -175,4 +190,9 @@ void main(void)
 	printf("lwp_struct size:%ld\n", sizeof(struct lwp_struct));
 	printf("bndregs_struct size:%ld\n", sizeof(struct bndregs_struct));
 	printf("bndcsr_struct size:%ld\n", sizeof(struct bndcsr_struct));
+	printf("Before xgetbv, eax:%x, ebx:%x, ecx:%x, edx:%x\n",
+			eax, ebx, ecx, edx);
+	xgetbv(&eax, &ebx, &ecx, &edx);
+	printf("After xgetbv, eax:%x, ebx:%x, ecx:%x, edx:%x\n",
+		eax, ebx, ecx, edx);
 }
