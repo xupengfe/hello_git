@@ -1,4 +1,4 @@
-BIN = xsave xsave_list
+BIN = xsave xsave_list strtok
 
 all: $(BIN)
 
