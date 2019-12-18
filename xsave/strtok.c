@@ -4,11 +4,14 @@
 
 int main()
 {
-	char str[]="ab|cd|ef=y";
+	char *str_ori="ab|cd|ef=y";
+	char str[strlen(str_ori)];
 	char *ptr;
 	char *p;
 	char *left;
 
+	memcpy(str, str_ori, strlen(str_ori));
+//	strncpy(str, str_ori, strlen(str_ori));
 	printf("before strtok:  str=%s\n",str);
 	printf("after:\n");
 	ptr = strtok_r(str, "|=", &p);
@@ -23,5 +26,7 @@ int main()
 		if (strlen(p) == 0)
 			break;
 	}
+
+	printf("str_ori:%s\n", str_ori);
 	return 0;
 }
