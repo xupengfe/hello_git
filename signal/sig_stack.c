@@ -10,20 +10,12 @@ void sigaction_handler(int signum, siginfo_t *info, void *ptr)
 {
 	printf("For SIGUSR1:10.\nReceived signal:%d\n",
 		info->si_signo);
-	printf("si_errno:%d, si_code:%d\n", info->si_errno, info->si_code);
+	printf("si_errno:%d\nsi_code:%d\n", info->si_errno, info->si_code);
 }
 
 int signal_access_func(void)
 {
-	//stack_t ss;
 	struct sigaction sigact;
-	struct sigaction sa;
-
-/*
-	ss.ss_sp = malloc(SIGSTKSZ);
-	ss.ss_flags = 0;
-	ss.ss_size = SIGSTKSZ;
-*/
 
 	sigemptyset(&sigact.sa_mask);
 	sigact.sa_flags = SA_SIGINFO;
@@ -46,7 +38,7 @@ int hack(void)
 	exit (1);
 }
 
-void shstk_violation_handler(int signum, siginfo_t *si, void *uc)
+void sigusr2_handler(int signum, siginfo_t *si, void *uc)
 {
 	int exp_sig=12;
 
@@ -61,11 +53,10 @@ void shstk_violation_handler(int signum, siginfo_t *si, void *uc)
 	}
 }
 
-int signal_shstk_violation(void)
+int signal_sigusr2(void)
 {
 	int result;
 	struct sigaction sa;
-	unsigned long *addr_ssp;
 
 	result=sigemptyset(&sa.sa_mask);
 	if (result) {
@@ -73,12 +64,13 @@ int signal_shstk_violation(void)
 		return 2;
 	}
 	sa.sa_flags = SA_SIGINFO;
-	sa.sa_sigaction = shstk_violation_handler;
+	sa.sa_sigaction = sigusr2_handler;
 	result = sigaction(SIGUSR2, &sa, NULL);
 	if (result) {
 		printf("Could not handle SIGUSR2(12)\n");
 		return 2;
 	}
+	raise(SIGUSR2);
 	raise(SIGUSR2);
 }
 
@@ -91,22 +83,8 @@ void usage(void)
 
 int main(int argc, char **argv)
 {
-	stack_t ss;
-	struct sigaction sigact;
-	struct sigaction sa;
-	unsigned long *addr_rbp, *addr_ssp;
 	int result;
 	char parm;
-
-	printf("Allocate ss.ss_sp memory size SIGSTKSZ:%d\n", SIGSTKSZ);
-	ss.ss_sp = malloc(SIGSTKSZ);
-	ss.ss_flags = 0;
-	ss.ss_size = SIGSTKSZ;
-	result=sigemptyset(&sa.sa_mask);
-	if (result) {
-		printf("Init empty sa signal failed\n");
-		return 2;
-	}
 
 	if (argc == 1) {
 		usage();
@@ -123,7 +101,7 @@ int main(int argc, char **argv)
 			signal_access_func();
 			break;
 		case 's':
-			signal_shstk_violation();
+			signal_sigusr2();
 			break;
 		default:
 			usage();
