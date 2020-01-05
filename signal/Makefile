@@ -1,4 +1,4 @@
-BIN = signal
+BIN = signal sig_stack
 
 all: $(BIN)
 
