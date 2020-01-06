@@ -1,5 +1,5 @@
-echo "runtests -l xupengfe:XXX"
-runtests -l xupengfe:Qazwsx297
+echo "runtests hpalm -l xupengfe:XXX"
+runtests hpalm -l xupengfe:Qazwsx297
 sleep 1
 echo "runtests -s"
 runtests -s
