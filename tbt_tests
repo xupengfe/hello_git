@@ -1,0 +1,52 @@
+TBT_XS_BAT_CONFIG_TEST tbt_verify_sysfs_mod.sh -t config
+TBT_XS_BAT_USER_MODE_TEST tbt_verify_sysfs_mod.sh -t user
+TBT_XS_BAT_TBT_DEVICE_ID tbt_verify_sysfs_mod.sh -t device_id
+TBT_XS_BAT_LOAD_UNLOAD_MOD_NET_TEST tbt_verify_sysfs_mod.sh -t mod_net
+TBT_XS_BAT_LOAD_UNLOAD_MOD_TEST tbt_verify_sysfs_mod.sh -t mod
+TBT_XS_BAT_MOD_TBT_NET_TIME tbt_verify_sysfs_mod.sh -t mod_net_time
+TBT_XS_BAT_MOD_TBT_TIME tbt_verify_sysfs_mod.sh -t mod_time
+TBT_XS_BAT_BIOS_SET_CHECK tbt_verify_sysfs_mod.sh -t bios_setting
+TBT_XS_BAT_ITEM_AUTHORIZED_TEST tbt_verify_sysfs_mod.sh -t item -f authorized
+TBT_XS_BAT_ITEM_DEVICE_TEST tbt_verify_sysfs_mod.sh -t item -f device
+TBT_XS_BAT_ITEM_DEVICE_NAME_TEST tbt_verify_sysfs_mod.sh -t item -f device_name
+TBT_XS_BAT_ITEM_NVM_AUTH_TEST tbt_verify_sysfs_mod.sh -t item -f nvm_authenticate
+TBT_XS_BAT_ITEM_NVM_VER_TEST tbt_verify_sysfs_mod.sh -t item -f nvm_version
+TBT_XS_BAT_ITEM_UEVENT_ID_VER_TEST tbt_verify_sysfs_mod.sh -t item -f uevent
+TBT_XS_BAT_ITEM_UNIQUE_ID_VER_TEST tbt_verify_sysfs_mod.sh -t item -f unique_id
+TBT_XS_BAT_ITEM_VENDOR_TEST tbt_verify_sysfs_mod.sh -t item -f vendor
+TBT_XS_BAT_ITEM_VENDOR_NAME_TEST tbt_verify_sysfs_mod.sh -t item -f vendor_name
+TBT_XS_BAT_DOMAIN_SECURITY_TEST tbt_verify_sysfs_mod.sh -t domain -f security
+TBT_XS_BAT_DOMAIN_UEVENT_TEST tbt_verify_sysfs_mod.sh -t domain -f uevent
+TBT_XS_BAT_DEVICE_TOPO_CHECK tbt_verify_sysfs_mod.sh -t topo
+TBT_XS_BAT_CM_MODE_CHECK tbt_verify_sysfs_mod.sh -t cm_mode
+TBT_XS_FUNC_TBT4_TOPO tbt_tools.sh -s tbt4_topo
+TBT_XS_FUNC_TBT_STUFF_VIEW tbt_tools.sh -s tbt_stuff
+TBT_XS_FUNC_RW_TBT_SSD_10M tbt_ssd_read_write.sh -b 1MB -c 10 -p ssd -t 10
+TBT_XS_FUNC_RW_TBT_SSD_100M tbt_ssd_read_write.sh -b 1MB -c 100 -p ssd -t 10
+TBT_XS_FUNC_RW_TBT_SSD_500M tbt_ssd_read_write.sh -b 10MB -c 50 -p ssd -t 5
+TBT_XS_FUNC_RW_TBT_SSD_1000M tbt_ssd_read_write.sh -b 10MB -c 100 -p ssd -t 5
+TBT_XS_FUNC_RW_2.0_FLASH tbt_ssd_read_write.sh -b 1MB -c 100 -p 2.0 -d flash -t 2
+TBT_XS_FUNC_RW_3.0_FLASH tbt_ssd_read_write.sh -b 1MB -c 100 -p 3.0 -d flash -t 2
+TBT_XS_FUNC_NVMEM_CHECK tbt_func_test.sh -s nvmem_check
+TBT_XS_FUNC_ADM_TOPO tbt_tools.sh -s adm_topo
+TBT_XS_FUNC_ADM_APPROVE_ALL tbt_tools.sh -s adm_approve_all
+TBT_XS_FUNC_ADM_DEVICES tbt_tools.sh -s adm_devices
+TBT_XS_FUNC_ADM_ACL tbt_tools.sh -s adm_acl
+TBT_XS_FUNC_ADM_RM_FIRST tbt_tools.sh -s adm_remove_first
+TBT_XS_FUNC_ADM_RM_ALL tbt_tools.sh -s adm_remove_all
+TBT_XS_FUNC_FREEZE_TBT_TEST tbt_func_test.sh -s suspend -t freeze -p tbt
+TBT_XS_FUNC_FREEZE_SSD_RW tbt_func_test.sh -s suspend -t freeze -p ssd
+TBT_XS_FUNC_FREEZE_MONITOR_TEST tbt_func_test.sh -s suspend -t freeze -p monitor
+TBT_XS_FUNC_S2IDLE_TBT_TEST tbt_func_test.sh -s suspend -t s2idle -p tbt
+TBT_XS_FUNC_S2IDLE_SSD_RW tbt_func_test.sh -s suspend -t s2idle -p ssd
+TBT_XS_FUNC_S2IDLE_MONITOR_TEST tbt_func_test.sh -s suspend -t s2idle -p monitor
+TBT_XS_FUNC_S3_TBT_TEST tbt_func_test.sh -s suspend -t deep -p tbt
+TBT_XS_FUNC_S3_SSD_RW tbt_func_test.sh -s suspend -t deep -p ssd
+TBT_XS_FUNC_S3_MONITOR_TEST tbt_func_test.sh -s suspend -t deep -p monitor
+TBT_XS_FUNC_S4_TBT_TEST tbt_func_test.sh -s suspend -t disk -p tbt
+TBT_XS_FUNC_S4_SSD_RW tbt_func_test.sh -s suspend -t disk -p ssd
+TBT_XS_FUNC_S4_MONITOR_TEST tbt_func_test.sh -s suspend -t disk -p monitor
+TBT_XS_FUNC_RTD3_HOST_D3
+TBT_XS_FUNC_SWCM_VERIFY_TEST tbt_func_test.sh -s swcm_verify
+TBT_XS_FUNC_VTD_ENABLE_TEST tbt_func_test.sh -s vtd_enable
+TBT_XS_FUNC_VTD_IOMMU_VERIFY tbt_func_test.sh -s iommu_verify
