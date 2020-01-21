@@ -18,7 +18,9 @@
 #include <linux/types.h>
 #include "xsave_list.h"
 
-static int linux_xsave_size;
+#define ALIGN(x, a)	(((x) + (a) - 1) & ~((a) - 1))
+
+static int linux_xsave_size, sum_size, align_size;
 static u64 xfeatures_mask_all;
 
 void usage(char *progname)
@@ -127,9 +129,14 @@ static void print_xstate_feature(u32 xstate_mask)
 		xfeature_size = 64;
 	else
 		xfeature_size = get_xfeature_size(xstate_mask);
+	sum_size = xfeature_size + sum_size;
+	if (is_aligned)
+		align_size = ALIGN(sum_size, 64);
+	else
+		align_size = sum_size;
 
-	printf("CPU support XSAVE 0x%05x| %04d |   %d   |'%s'\n",
-		xstate_mask, xfeature_size, is_aligned, feature_name);
+	printf("CPU support XSAVE 0x%05x| %04d |   %d   | %04d |    %04d    |'%s'\n",
+		xstate_mask, xfeature_size, is_aligned, sum_size, align_size, feature_name);
 	linux_xsave_size = linux_xsave_size+xfeature_size;
 }
 
@@ -158,7 +165,7 @@ int cpu_support_xstate_list(void)
 		xfeatures_mask_all);
 	printf("Align for CPUID(EAX=0DH, ECX=xfeature_id):ECX[bit 2].\n");
 
-	printf("CPU support XSAVE 0x000ID| Size | Align |'feature_name'\n");
+	printf("CPU support XSAVE 0x000ID| Size | Align | Sum  | Align_size |'feature_name'\n");
 	for (i = 0; i < XFEATURE_MAX; i++) {
 		if (!(xfeatures_mask_all & (1 << i)))
 			continue;
