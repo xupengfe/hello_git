@@ -20,14 +20,19 @@
 #include <setjmp.h>
 #include <sys/uio.h>
 
+#define X86_EFLAGS_TF (1UL << 8)
+
 #ifdef __x86_64__
 # define VSYS(x) (x)
 #else
 # define VSYS(x) 0
 #endif
 
+static volatile sig_atomic_t num_vsyscall_traps;
 static jmp_buf jmpbuf;
-/* 
+
+
+/*
  * file /proc/self/maps contain 'r':vsyscall map:
  * 'r':vsyscall map: ffffffffff600000-ffffffffff601000 r-xp
  */
@@ -38,6 +43,9 @@ typedef long (*gtod_t)(struct timeval *tv, struct timezone *tz);
 const gtod_t vgtod = (gtod_t)VSYS(0xffffffffff600000);
 //const gtod_t vgtod = (gtod_t)VSYS(0xffffffffff601000);
 gtod_t vdso_gtod;
+
+typedef long (*time_func_t)(time_t *t);
+const time_func_t vtime = (time_func_t)VSYS(0xffffffffff600400);
 
 void dump_buffer(unsigned char *buf, int size)
 {
@@ -91,6 +99,8 @@ static void sethandler(int sig, void (*handler)(int, siginfo_t *, void *),
 		       int flags)
 {
 	struct sigaction sa;
+
+	printf("Receive sig:%d\n", sig);
 	memset(&sa, 0, sizeof(sa));
 	sa.sa_sigaction = handler;
 	sa.sa_flags = SA_SIGINFO | flags;
@@ -128,7 +138,7 @@ static int test_process_vm_readv(void)
 	ret = process_vm_readv(getpid(), &local, 1, &remote, 1, 0);
 	printf("-> After process_vm_readv copy to buf\n");
 	dump_buffer(buf, 4096);
-	printf("*(const int *)0xffffffffff600000: %x\n", *(const int *)0xffffffffff600000);
+
 	if (ret != 4096) {
 		printf("[OK]\tprocess_vm_readv() failed (ret = %d, errno = %d)\n", ret, errno);
 		return 0;
@@ -147,12 +157,82 @@ static int test_process_vm_readv(void)
 	return 0;
 }
 
+static unsigned long get_eflags(void)
+{
+	unsigned long eflags;
+	asm volatile ("pushfq\n\tpopq %0" : "=rm" (eflags));
+	return eflags;
+}
+
+static void set_eflags(unsigned long eflags)
+{
+	asm volatile ("pushq %0\n\tpopfq" : : "rm" (eflags) : "flags");
+}
+
+static void sigtrap(int sig, siginfo_t *info, void *ctx_void)
+{
+	ucontext_t *ctx = (ucontext_t *)ctx_void;
+	unsigned long ip = ctx->uc_mcontext.gregs[REG_RIP];
+
+	if (((ip ^ 0xffffffffff600000UL) & ~0xfffUL) == 0)
+		num_vsyscall_traps++;
+}
+
+static int test_emulation(void)
+{
+	time_t tmp = 0;
+	bool is_native;
+
+	printf("[RUN]\tchecking that vsyscalls are emulated\n");
+	sethandler(SIGTRAP, sigtrap, 0);
+	set_eflags(get_eflags() | X86_EFLAGS_TF);
+	printf("&tmp:%p, tmp:%lx\n", &tmp, tmp);
+	vtime(&tmp);
+	printf("&tmp:%p, tmp:%lx\n", &tmp, tmp);
+	set_eflags(get_eflags() & ~X86_EFLAGS_TF);
+
+	/*
+	 * If vsyscalls are emulated, we expect a single trap in the
+	 * vsyscall page -- the call instruction will trap with RIP
+	 * pointing to the entry point before emulation takes over.
+	 * In native mode, we expect two traps, since whatever code
+	 * the vsyscall page contains will be more than just a ret
+	 * instruction.
+	 */
+	is_native = (num_vsyscall_traps > 1);
+	printf("is_native:%d, num_vsyscall_traps:%d\n",
+		is_native, num_vsyscall_traps);
+	printf("[%s]\tvsyscalls are %s (%d instructions in vsyscall page)\n",
+	       (is_native ? "FAIL" : "OK"),
+	       (is_native ? "native" : "emulated"),
+	       (int)num_vsyscall_traps);
+
+	return is_native;
+}
+
+int dump_vsyscall_key_address()
+{
+	int *a000, *a400, *a800;
+	a000 = (int *)0xffffffffff600000;
+	a400 = (int *)0xffffffffff600400;
+	a800 = (int *)0xffffffffff600800;
+
+	printf("a000:%x, 008:%x  012:%x\n",
+		*a000, *(a000 + 1), *(a000 + 2));
+	printf("a400:%x, 408:%x  412:%x\n",
+		*a400, *(a400 + 1), *(a400 + 2));
+	printf("a800:%x, 808:%x  812:%x\n",
+		*a800, *(a800 + 1), *(a800 + 2));
+	return 0;
+}
+
 int main()
 {
 	int errs = 0;
 	struct timeval tv_vdso, tv_vsys;
 	struct timezone tz_vdso, tz_vsys;
 	long ret_vdso = -1, ret_vsys = -1;
+	struct timeval tv;
 
 	//if (vdso_gtod) {
 	//	ret_vdso = vdso_gtod(&tv_vdso, &tz_vdso);
@@ -169,7 +249,16 @@ int main()
 	errs += test_vsys_r();
 	printf("errs after test_vsys_r:%d\n", errs);
 	errs += test_process_vm_readv();
-	printf("errs after test_process_vm_readv:%d\n",
-		errs);
+	printf("errs after test_process_vm_readv:%d\n", errs);
+
+	dump_vsyscall_key_address();
+	gettimeofday(&tv, NULL);
+
+	#ifdef __x86_64__
+		errs += test_emulation();
+	#endif
+	dump_vsyscall_key_address();
+	printf("errs num:%d\n", errs);
+
 	return 0;
 }
