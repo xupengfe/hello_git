@@ -1,5 +1,9 @@
-/* SPDX-License-Identifier: GPL-2.0 */
-
+// SPDX-License-Identifier: GPL-2.0-or-later
+/*
+ *  lass_test.c
+ *  Copyright (C) 2020 Intel Corporation
+ *  Author: Pengfei, Xu <pengfei.xu@intel.com>
+ */
 #define _GNU_SOURCE
 
 #include <stdio.h>
@@ -28,7 +32,7 @@
 # define VSYS(x) 0
 #endif
 
-static volatile sig_atomic_t num_vsyscall_traps;
+static sig_atomic_t num_vsyscall_traps;
 static jmp_buf jmpbuf;
 
 /*
@@ -36,7 +40,7 @@ static jmp_buf jmpbuf;
  * 'r':vsyscall map: ffffffffff600000-ffffffffff601000 r-xp
  */
 bool vsyscall_map_r = true;
-static volatile unsigned long segv_err;
+static unsigned long segv_err;
 
 typedef long (*gtod_t)(struct timeval *tv, struct timezone *tz);
 const gtod_t vgtod = (gtod_t)VSYS(0xffffffffff600000);
@@ -44,16 +48,17 @@ const gtod_t vgtod = (gtod_t)VSYS(0xffffffffff600000);
 typedef long (*time_func_t)(time_t *t);
 const time_func_t vtime = (time_func_t)VSYS(0xffffffffff600400);
 
-void usage(void)
+int usage(void)
 {
-    printf("Usage: [g|r|v|d|t|e]\n");
+	printf("Usage: [g|r|v|d|t|e]\n");
 	printf("g  Test call 0xffffffffff600000\n");
 	printf("r  Test read 0xffffffffff600000\n");
 	printf("v  Test process_vm_readv read address\n");
 	printf("d  Test dump 0xffffffffff600000-1000 key address\n");
 	printf("t  Test syscall gettimeofday\n");
 	printf("e  Test vsyscall emulation\n");
-    printf("a  Test all\n");
+	printf("a  Test all\n");
+	exit(2);
 }
 
 void dump_buffer(unsigned char *buf, int size)
@@ -66,21 +71,22 @@ void dump_buffer(unsigned char *buf, int size)
 	for (i = 0; i < size; i += 16) {
 		printf("%04x: ", i);
 
-		for (j = i; ((j < i + 16) && (j < size)); j++) {
+		for (j = i; ((j < i + 16) && (j < size)); j++)
 			printf("%02x ", buf[j]);
-		}
+
 		printf("\n");
 	}
 }
 
 static int test_vsys_r(void)
 {
+	bool can_read;
+
 #ifdef __x86_64__
 	printf("[RUN]\tChecking read access to the vsyscall page\n");
-	bool can_read;
 	if (sigsetjmp(jmpbuf, 1) == 0) {
-		printf("sigsetjmp in! and *(volatile int *)0xffffffffff600000\n");
-		*(volatile int *)0xffffffffff600000;
+		printf("sigsetjmp *(int *)0xffffffffff600000\n");
+		*(int *)0xffffffffff600000;
 		can_read = true;
 	} else {
 		can_read = false;
@@ -97,7 +103,7 @@ static int test_vsys_r(void)
 		printf("[OK]\tWe have read access\n");
 	} else {
 		printf("[OK]\tWe do not have read access: #PF(0x%lx)\n",
-		       segv_err);
+			   segv_err);
 	}
 #endif
 
@@ -105,7 +111,7 @@ static int test_vsys_r(void)
 }
 
 static void sethandler(int sig, void (*handler)(int, siginfo_t *, void *),
-		       int flags)
+			   int flags)
 {
 	struct sigaction sa;
 
@@ -149,15 +155,16 @@ static int test_process_vm_readv(void)
 	dump_buffer(buf, 4096);
 
 	if (ret != 4096) {
-		printf("[OK]\tprocess_vm_readv() failed (ret = %d, errno = %d)\n", ret, errno);
+		printf("[OK]\tprocess_vm_readv failed (ret=%d, errno=%d)\n",
+			ret, errno);
 		return 0;
 	}
 
 	if (vsyscall_map_r) {
 		if (!memcmp(buf, (const void *)0xffffffffff600000, 4096)) {
-			printf("[OK]\tIt worked and read correct data\n");
+			printf("[OK]\tRead correct data\n");
 		} else {
-			printf("[FAIL]\tIt worked but returned incorrect data\n");
+			printf("[FAIL]\tRead but incorrect data\n");
 			return 1;
 		}
 	}
@@ -169,6 +176,7 @@ static int test_process_vm_readv(void)
 static unsigned long get_eflags(void)
 {
 	unsigned long eflags;
+
 	asm volatile ("pushfq\n\tpopq %0" : "=rm" (eflags));
 	return eflags;
 }
@@ -212,16 +220,17 @@ static int test_emulation(void)
 	printf("is_native:%d, num_vsyscall_traps:%d\n",
 		is_native, num_vsyscall_traps);
 	printf("[%s]\tvsyscalls are %s (%d instructions in vsyscall page)\n",
-	       (is_native ? "FAIL" : "OK"),
-	       (is_native ? "native" : "emulated"),
-	       (int)num_vsyscall_traps);
+		   (is_native ? "FAIL" : "OK"),
+		   (is_native ? "native" : "emulated"),
+		   (int)num_vsyscall_traps);
 
 	return is_native;
 }
 
-int dump_vsyscall_key_address()
+int dump_vsyscall_key_address(void)
 {
 	int *a000, *a400, *a800;
+
 	a000 = (int *)0xffffffffff600000;
 	a400 = (int *)0xffffffffff600400;
 	a800 = (int *)0xffffffffff600800;
@@ -237,69 +246,69 @@ int dump_vsyscall_key_address()
 
 int test_gtod(void)
 {
-    long ret_vsys = -1;
+	long ret_vsys = -1;
 	struct timeval tv_vsys;
 	struct timezone tz_vsys;
 
-    printf("tv_vsys.tv_sec:%ld  tv_usec:%ld, &tv_vsys:%p, &tz_vsys:%p\n",
+	printf("tv_vsys.sec:%ld usec:%ld, &tv:%p, &tz:%p\n",
 		tv_vsys.tv_sec, tv_vsys.tv_usec, &tv_vsys, &tz_vsys);
 	ret_vsys = vgtod(&tv_vsys, &tz_vsys);
-	printf("tv_vsys.tv_sec:%ld  tv_usec:%ld ret_vsys:%ld, &tv_vsys:%p, &tz_vsys:%p\n",
+	printf("tv_vsys.sec:%ld usec:%ld ret:%ld, &tv:%p, &tz:%p\n",
 		tv_vsys.tv_sec, tv_vsys.tv_usec, ret_vsys, &tv_vsys, &tz_vsys);
 
-    return ret_vsys;
+	return ret_vsys;
 }
 
 int main(int argc, char *argv[])
 {
 	int errs = 0;
-    char parm;
+	char parm;
 	struct timeval tv;
 
-    if (argc == 1) {
-        usage();
-        exit(2);
-    } else if (argc == 2) {
-        sscanf(argv[1], "%c", &parm);
-        printf("parm:%c\n", parm);
-    } else {
-        usage();
-        exit(2);
-    }
-    
-    sethandler(SIGSEGV, sigsegv, 0);
-    
-    switch(parm) {
-    case 'g':
-        test_gtod();
-        break;
-    case 'r':
-        test_vsys_r();
-        break;
-    case 'v':
-        test_process_vm_readv();
-        break;
-    case 'd':
-        dump_vsyscall_key_address();
-        break;
-    case 't':
-	    gettimeofday(&tv, NULL);
-        break;
-    case 'e':
-        test_emulation();
-        dump_vsyscall_key_address();
-        break;
-    case 'a':
-        test_gtod();
-        test_vsys_r();
-        test_process_vm_readv();
-        dump_vsyscall_key_address();
-        gettimeofday(&tv, NULL);
-        test_emulation();
-        dump_vsyscall_key_address();
-        break;
-    default:
-        usage();
-        exit(2);
-    }
+	if (argc == 1) {
+		usage();
+	} else if (argc == 2) {
+		if (sscanf(argv[1], "%c", &parm) != 1) {
+			printf("Invalid parm:%c\n", parm);
+			usage();
+		}
+		printf("parm:%c\n", parm);
+	} else {
+		usage();
+	}
+
+	sethandler(SIGSEGV, sigsegv, 0);
+
+	switch (parm) {
+	case 'g':
+		test_gtod();
+		break;
+	case 'r':
+		test_vsys_r();
+		break;
+	case 'v':
+		test_process_vm_readv();
+		break;
+	case 'd':
+		dump_vsyscall_key_address();
+		break;
+	case 't':
+		gettimeofday(&tv, NULL);
+		break;
+	case 'e':
+		test_emulation();
+		dump_vsyscall_key_address();
+		break;
+	case 'a':
+		test_gtod();
+		test_vsys_r();
+		test_process_vm_readv();
+		dump_vsyscall_key_address();
+		gettimeofday(&tv, NULL);
+		test_emulation();
+		dump_vsyscall_key_address();
+		break;
+	default:
+		usage();
+	}
 }
