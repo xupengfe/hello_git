@@ -33,6 +33,7 @@
 #endif
 
 static sig_atomic_t num_vsyscall_traps;
+static int sig_num = 0;
 static jmp_buf jmpbuf;
 
 /*
@@ -81,12 +82,14 @@ void dump_buffer(unsigned char *buf, int size)
 static int test_vsys_r(void)
 {
 	bool can_read;
+	int a = 0;
 
 #ifdef __x86_64__
 	printf("[RUN]\tChecking read access to the vsyscall page\n");
 	if (sigsetjmp(jmpbuf, 1) == 0) {
 		printf("sigsetjmp *(int *)0xffffffffff600000\n");
-		*(int *)0xffffffffff600000;
+		a = *(int *)0xffffffffff600000;
+		printf("0xffffffffff600000 content:%d\n", a);
 		can_read = true;
 	} else {
 		can_read = false;
@@ -129,16 +132,17 @@ static void sigsegv(int sig, siginfo_t *info, void *ctx_void)
 	ucontext_t *ctx = (ucontext_t *)ctx_void;
 
 	segv_err =  ctx->uc_mcontext.gregs[REG_ERR];
-	printf("Received sig:%d.\n", sig);
+	printf("Received sig:%d, si_code:%d\n",
+		sig, info->si_code);
 	siglongjmp(jmpbuf, 1);
 }
 
 static int test_process_vm_readv(void)
 {
 #ifdef __x86_64__
-	char buf[4096] = "";
+	unsigned char buf[4096] = "";
 	struct iovec local, remote;
-	int ret, i = 0;
+	int ret;
 
 	printf("[RUN]\tprocess_vm_readv() from vsyscall page\n");
 
@@ -191,8 +195,12 @@ static void sigtrap(int sig, siginfo_t *info, void *ctx_void)
 	ucontext_t *ctx = (ucontext_t *)ctx_void;
 	unsigned long ip = ctx->uc_mcontext.gregs[REG_RIP];
 
-	if (((ip ^ 0xffffffffff600000UL) & ~0xfffUL) == 0)
+	sig_num++;
+	if (((ip ^ 0xffffffffff600000UL) & ~0xfffUL) == 0) {
+		printf("Got sig:%d,si_code:%d,ip:%lx,REG_RIP:%d,sig_num:%d\n",
+		sig, info->si_code, ip, REG_RIP, sig_num);
 		num_vsyscall_traps++;
+	}
 }
 
 static int test_emulation(void)
@@ -250,8 +258,6 @@ int test_gtod(void)
 	struct timeval tv_vsys;
 	struct timezone tz_vsys;
 
-	printf("tv_vsys.sec:%ld usec:%ld, &tv:%p, &tz:%p\n",
-		tv_vsys.tv_sec, tv_vsys.tv_usec, &tv_vsys, &tz_vsys);
 	ret_vsys = vgtod(&tv_vsys, &tz_vsys);
 	printf("tv_vsys.sec:%ld usec:%ld ret:%ld, &tv:%p, &tz:%p\n",
 		tv_vsys.tv_sec, tv_vsys.tv_usec, ret_vsys, &tv_vsys, &tz_vsys);
@@ -261,7 +267,6 @@ int test_gtod(void)
 
 int main(int argc, char *argv[])
 {
-	int errs = 0;
 	char parm;
 	struct timeval tv;
 
