@@ -33,7 +33,7 @@
 #endif
 
 static sig_atomic_t num_vsyscall_traps;
-static int sig_num = 0;
+static int sig_num;
 static jmp_buf jmpbuf;
 
 /*
