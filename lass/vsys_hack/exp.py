@@ -7,8 +7,8 @@ import time
 import struct
 
 # context.log_level = "debug"
-sh = process('./vsyscall')
-elf = ELF('./vsyscall')
+sh = process('./vsyscall_origin')
+elf = ELF('./vsyscall_origin')
 
 # 生成调试文件
 try:
