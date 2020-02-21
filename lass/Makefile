@@ -1,4 +1,4 @@
-BIN = t1 t3 test_vsyscall sigsetjump lass_test
+BIN = t1 t3 test test_vsyscall sigsetjump lass_test
 
 all: $(BIN)
 
