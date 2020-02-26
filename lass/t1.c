@@ -28,8 +28,8 @@ int main()
   pid = syscall(SYS_getpid);
   printf("SYS_getpid pid = %d\n", pid);
 
-  hack_a = *(const int *)0xffffffffff600000;
-  printf("0xffffffffff600000:0x%x\n", hack_a);
+  //hack_a = *(const int *)0xffffffffff600000;
+  //printf("0xffffffffff600000:0x%x\n", hack_a);
   // hack_a = *(const int *)0xffffffffff601000; // will SIGSEGV
   return 0;
 }
