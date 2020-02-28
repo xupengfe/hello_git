@@ -62,7 +62,7 @@ int usage(void)
 	printf("g  Test call 0xffffffffff600000\n");
 	printf("r  Test read 0xffffffffff600000\n");
 	printf("v  Test process_vm_readv read address\n");
-	printf("d  Test dump 0xffffffffff600000-1000 key address\n");
+	printf("d  Test vsyscall trigger correct page fault\n");
 	printf("t  Test syscall gettimeofday\n");
 	printf("e  Test vsyscall emulation\n");
 	printf("a  Test all\n");
@@ -179,9 +179,9 @@ static int test_vsys_r(void)
 	if (vsyscall_map_r)
 		printf("[WARN]\tvsyscall should not set read for lass\n");
 	if (can_read)
-		fail_case("Could read vsyscall address when lass enabled");
+		fail_case("Readable vsyscall address is not as expected");
 	else
-		pass_case("Could not read vsyscall addr when lass enabled");
+		pass_case("Could not read vsyscall addr as expected");
 #endif
 
 	return 0;
@@ -206,8 +206,8 @@ static void sigsegv(int sig, siginfo_t *info, void *ctx_void)
 	ucontext_t *ctx = (ucontext_t *)ctx_void;
 
 	segv_err =  ctx->uc_mcontext.gregs[REG_ERR];
-	printf("Received sig:%d, si_code:%d\n",
-		sig, info->si_code);
+	printf("Received sig:%d, si_code:%d, REG_ERR:0x%x\n",
+		sig, info->si_code, REG_ERR);
 	siglongjmp(jmpbuf, 1);
 }
 
@@ -225,9 +225,6 @@ static int test_process_vm_readv(void)
 	remote.iov_base = (void *)0xffffffffff600000;
 	remote.iov_len = 4096;
 
-	printf("buf before copy:\n");
-	dump_buffer(buf, 4096);
-
 	ret = process_vm_readv(getpid(), &local, 1, &remote, 1, 0);
 	printf("After process_vm_readv copy to buf\n");
 	dump_buffer(buf, 4096);
@@ -235,17 +232,67 @@ static int test_process_vm_readv(void)
 	if (ret != 4096) {
 		printf("[OK]\tprocess_vm_readv failed (ret=%d, errno=%d)\n",
 			ret, errno);
-		pass_case("Could not process_vm_readv when lass enabled");
+		pass_case("Could not process_vm_readv as expected");
 		return 0;
-	}
+	} else
 
 	if (vsyscall_map_r) {
-		if (!memcmp(buf, (const void *)0xffffffffff600000, 4096))
-			pass_case("Read correct data");
-		else {
-			fail_case("read but incorrect data");
-			return 1;
-		}
+		if (memcmp(buf, (const void *)0xffffffffff600000, 4096))
+			printf("[WARN]\t Read incorrect data\n");
+		fail_case("read vsyscall data is not acceptable in lass");
+		return 1;
+	}
+#endif
+
+	return 0;
+}
+
+static int test_call_gtod(void)
+{
+	int ret_sys = -1;
+	struct timeval tv;
+
+	ret_sys = gettimeofday(&tv, NULL);
+	if (ret_sys)
+		fail_case("gettimeofday func failed, check lass");
+	else
+		pass_case("gettimeofday func pass");
+
+	return ret_sys;
+}
+
+static int test_vsys_x(void)
+{
+	bool can_exec;
+	struct timeval tv;
+	struct timezone tz;
+
+#ifdef __x86_64__
+	if (vsyscall_map_x)
+		printf("It's executable as expected for lass\n");
+	else
+		printf("[WARN]\tIt's not executable vsyscall\n");
+
+	printf("[RUN]\tMake sure that vsyscalls is executable\n");
+	if (sigsetjmp(jmpbuf, 1) == 0) {
+		vgtod(&tv, &tz);
+		can_exec = true;
+	} else {
+		can_exec = false;
+	}
+	printf("can_exec:%d\n", can_exec);
+	if (can_exec) {
+		pass_case("Execute the vsyscall without page fault");
+		return 1;
+	} else if (segv_err & (1 << 4)) { /* INSTR */
+		printf("Right page fault(& 0x%x): #PF(0x%lx)\n",
+		    (1 << 4), segv_err);
+		fail_case("Should no page fault with correct err");
+	} else {
+		printf("Page fault with wrong error: #PF(0x%lx)\n",
+		    segv_err);
+		fail_case("Trigger wrong page fault");
+		return 1;
 	}
 #endif
 
@@ -283,7 +330,7 @@ static int test_emulation(void)
 	time_t tmp = 0;
 	bool is_native;
 
-	printf("[RUN]\tchecking that vsyscalls are emulated\n");
+	printf("[RUN]\tchecking vsyscall is emulated\n");
 	sethandler(SIGTRAP, sigtrap, 0);
 	set_eflags(get_eflags() | X86_EFLAGS_TF);
 	printf("&tmp:%p, tmp:%lx\n", &tmp, tmp);
@@ -306,26 +353,12 @@ static int test_emulation(void)
 		   (is_native ? "FAIL" : "OK"),
 		   (is_native ? "native" : "emulated"),
 		   (int)num_vsyscall_traps);
+	if(is_native)
+		fail_case("It's native mode, traps num more than 1");
+	else
+		pass_case("Not native mode, traps num is 1");
 
 	return is_native;
-}
-
-int dump_vsyscall_key_address(void)
-{
-	int *a000, *a400, *a800;
-
-	a000 = (int *)0xffffffffff600000;
-	a400 = (int *)0xffffffffff600400;
-	a800 = (int *)0xffffffffff600800;
-
-	printf("a000:%x, 008:%x  012:%x\n",
-		*a000, *(a000 + 1), *(a000 + 2));
-	printf("a400:%x, 408:%x  412:%x\n",
-		*a400, *(a400 + 1), *(a400 + 2));
-	printf("a800:%x, 808:%x  812:%x\n",
-		*a800, *(a800 + 1), *(a800 + 2));
-
-	return 0;
 }
 
 int test_gtod(void)
@@ -357,7 +390,6 @@ int test_gtod(void)
 int main(int argc, char *argv[])
 {
 	char parm;
-	struct timeval tv;
 
 	if (argc == 1) {
 		usage();
@@ -385,23 +417,21 @@ int main(int argc, char *argv[])
 		test_process_vm_readv();
 		break;
 	case 'd':
-		dump_vsyscall_key_address();
+		test_vsys_x();
 		break;
 	case 't':
-		gettimeofday(&tv, NULL);
+		test_call_gtod();
 		break;
 	case 'e':
 		test_emulation();
-		dump_vsyscall_key_address();
 		break;
 	case 'a':
 		test_gtod();
 		test_vsys_r();
 		test_process_vm_readv();
-		dump_vsyscall_key_address();
-		gettimeofday(&tv, NULL);
+		test_vsys_x();
+		test_call_gtod();
 		test_emulation();
-		dump_vsyscall_key_address();
 		break;
 	default:
 		usage();

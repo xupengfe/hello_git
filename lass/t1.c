@@ -24,6 +24,7 @@ static void sigsegv(int sig, siginfo_t *info, void *ctx_void)
 	segv_err =  ctx->uc_mcontext.gregs[REG_ERR];
 	printf("Received sig:%d, num:%d, si_code:%d, errno:%d, segv_err:%ld\n",
     sig, info->si_signo, info->si_code, info->si_errno, segv_err);
+  exit(0);
 }
 
 static void sethandler(int sig, void (*handler)(int, siginfo_t *, void *),
@@ -63,8 +64,8 @@ int main()
   pid = syscall(SYS_getpid);
   printf("SYS_getpid pid = %d\n", pid);
 
-  //hack_a = *(const int *)0xffffffffff600000;
-  //printf("0xffffffffff600000:0x%x\n", hack_a);
-  // hack_a = *(const int *)0xffffffffff601000; // will SIGSEGV
+  hack_a = *(const int *)0xffffffffff600000;
+  printf("0xffffffffff600000:0x%x\n", hack_a);
+  //hack_a = *(const int *)0xffffffffff601000; // will SIGSEGV
   return 0;
 }
