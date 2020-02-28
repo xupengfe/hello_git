@@ -34,7 +34,7 @@
 #endif
 
 static sig_atomic_t num_vsyscall_traps;
-static int sig_num, result;
+static int sig_num, pass_num, fail_num;
 static jmp_buf jmpbuf;
 
 /*
@@ -49,6 +49,12 @@ const gtod_t vgtod = (gtod_t)VSYS(0xffffffffff600000);
 
 typedef long (*time_func_t)(time_t *t);
 const time_func_t vtime = (time_func_t)VSYS(0xffffffffff600400);
+
+/* syscalls */
+static inline long sys_gtod(struct timeval *tv, struct timezone *tz)
+{
+	return syscall(SYS_gettimeofday, tv, tz);
+}
 
 int usage(void)
 {
@@ -66,25 +72,15 @@ int usage(void)
 static int fail_case(const char *format)
 {
 	printf("[FAIL]\t%s\n", format);
-	exit(1);
+	fail_num++;
+	return 1;
 }
 
 static int pass_case(const char *format)
 {
 	printf("[PASS]\t%s\n", format);
+	pass_num++;
 	return 0;
-}
-
-static int check_result(void)
-{
-	if (result >= 1) {
-		printf("result:%d\n", result);
-		pass_case("result >= 1");
-		return 0;
-	} else {
-		printf("result:%d\n", result);
-		fail_case("result < 1");
-	}
 }
 
 static int init_vsys(void)
@@ -229,24 +225,25 @@ static int test_process_vm_readv(void)
 	remote.iov_base = (void *)0xffffffffff600000;
 	remote.iov_len = 4096;
 
-	printf("-> buf before copy:\n");
+	printf("buf before copy:\n");
 	dump_buffer(buf, 4096);
 
 	ret = process_vm_readv(getpid(), &local, 1, &remote, 1, 0);
-	printf("-> After process_vm_readv copy to buf\n");
+	printf("After process_vm_readv copy to buf\n");
 	dump_buffer(buf, 4096);
 
 	if (ret != 4096) {
 		printf("[OK]\tprocess_vm_readv failed (ret=%d, errno=%d)\n",
 			ret, errno);
+		pass_case("Could not process_vm_readv when lass enabled");
 		return 0;
 	}
 
 	if (vsyscall_map_r) {
-		if (!memcmp(buf, (const void *)0xffffffffff600000, 4096)) {
-			printf("[OK]\tRead correct data\n");
-		} else {
-			printf("[FAIL]\tRead but incorrect data\n");
+		if (!memcmp(buf, (const void *)0xffffffffff600000, 4096))
+			pass_case("Read correct data");
+		else {
+			fail_case("read but incorrect data");
 			return 1;
 		}
 	}
@@ -327,19 +324,33 @@ int dump_vsyscall_key_address(void)
 		*a400, *(a400 + 1), *(a400 + 2));
 	printf("a800:%x, 808:%x  812:%x\n",
 		*a800, *(a800 + 1), *(a800 + 2));
+
 	return 0;
 }
 
 int test_gtod(void)
 {
 	long ret_vsys = -1;
-	struct timeval tv_vsys;
-	struct timezone tz_vsys;
+	struct timeval tv_vsys, tv_sys;
+	struct timezone tz_vsys, tz_sys;
 
-	ret_vsys = vgtod(&tv_vsys, &tz_vsys);
-	printf("tv_vsys.sec:%ld usec:%ld ret:%ld, &tv:%p, &tz:%p\n",
-		tv_vsys.tv_sec, tv_vsys.tv_usec, ret_vsys, &tv_vsys, &tz_vsys);
+	printf("[RUN]\ttest gettimeofday\n");
 
+	ret_vsys = sys_gtod(&tv_sys, &tz_sys);
+	if (ret_vsys)
+		fail_case("test sys gettimeofday failed");
+
+	if (vsyscall_map_x) {
+		printf("execute vgtod\n");
+		ret_vsys = vgtod(&tv_vsys, &tz_vsys);
+		if (ret_vsys)
+			fail_case("vgtod failed");
+	}
+	printf("tv_sys.sec:%ld usec:%ld ret:%ld, &tv:%p, &tz:%p\n",
+		tv_sys.tv_sec, tv_sys.tv_usec, ret_vsys, &tv_sys, &tz_sys);
+
+	if(!ret_vsys)
+		pass_case("test gettimeofday pass");
 	return ret_vsys;
 }
 
@@ -395,4 +406,7 @@ int main(int argc, char *argv[])
 	default:
 		usage();
 	}
+	printf("[Results] pass_num:%d, fail_num:%d\n",
+		pass_num, fail_num);
+	return !(!fail_num);
 }

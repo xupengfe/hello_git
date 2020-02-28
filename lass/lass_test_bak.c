@@ -24,8 +24,8 @@
 #include <setjmp.h>
 #include <sys/uio.h>
 
-#define MAPS_LINE_LEN 128
 #define X86_EFLAGS_TF (1UL << 8)
+#define MAPS_LINE_LEN 128
 
 #ifdef __x86_64__
 # define VSYS(x) (x)
@@ -34,70 +34,26 @@
 #endif
 
 static sig_atomic_t num_vsyscall_traps;
-static int sig_num, result;
+static int sig_num, pass_num, fail_num;
 static jmp_buf jmpbuf;
 
 /*
- * file /proc/self/maps contain 'r':vsyscall map:
- * 'r':vsyscall map: ffffffffff600000-ffffffffff601000 r-xp
+ * /proc/self/maps, r means readable, x means excutable
+ * vsyscall map: ffffffffff600000-ffffffffff601000 r-xp
  */
-bool vsyscall_map_r = true, vsyscall_map_x = false;
+bool vsyscall_map_r = false, vsyscall_map_x = false;
 static unsigned long segv_err;
 
 typedef long (*gtod_t)(struct timeval *tv, struct timezone *tz);
 const gtod_t vgtod = (gtod_t)VSYS(0xffffffffff600000);
-gtod_t vdso_gtod;
-
-typedef int (*vgettime_t)(clockid_t, struct timespec *);
-vgettime_t vdso_gettime;
 
 typedef long (*time_func_t)(time_t *t);
 const time_func_t vtime = (time_func_t)VSYS(0xffffffffff600400);
-time_func_t vdso_time;
-
-typedef long (*getcpu_t)(unsigned *, unsigned *, void *);
-const getcpu_t vgetcpu = (getcpu_t)VSYS(0xffffffffff600800);
-getcpu_t vdso_getcpu;
 
 /* syscalls */
 static inline long sys_gtod(struct timeval *tv, struct timezone *tz)
 {
 	return syscall(SYS_gettimeofday, tv, tz);
-}
-
-static double tv_diff(const struct timeval *a, const struct timeval *b)
-{
-	return (double)(a->tv_sec - b->tv_sec) +
-		(double)((int)a->tv_usec - (int)b->tv_usec) * 1e-6;
-}
-
-static int check_gtod(const struct timeval *tv_sys1,
-		      const struct timeval *tv_sys2,
-		      const struct timezone *tz_sys,
-		      const char *which,
-		      const struct timeval *tv_other,
-		      const struct timezone *tz_other)
-{
-	int nerrs = 0;
-	double d1, d2;
-
-	if (tz_other && (tz_sys->tz_minuteswest != tz_other->tz_minuteswest || tz_sys->tz_dsttime != tz_other->tz_dsttime)) {
-		printf("[FAIL] %s tz mismatch\n", which);
-		nerrs++;
-	}
-
-	d1 = tv_diff(tv_other, tv_sys1);
-	d2 = tv_diff(tv_sys2, tv_other); 
-	printf("\t%s time offsets: %lf %lf\n", which, d1, d2);
-
-	if (d1 < 0 || d2 < 0) {
-		printf("[FAIL]\t%s time was inconsistent with the syscall\n", which);
-		nerrs++;
-	} else {
-		printf("[OK]\t%s gettimeofday()'s timeval was okay\n", which);
-	}
-
-	return nerrs;
 }
 
 int usage(void)
@@ -113,66 +69,33 @@ int usage(void)
 	exit(2);
 }
 
-static void init_vdso(void)
+static int fail_case(const char *format)
 {
-	void *vdso = dlopen("linux-vdso.so.1", RTLD_LAZY | RTLD_LOCAL | RTLD_NOLOAD);
-	if (!vdso)
-		vdso = dlopen("linux-gate.so.1", RTLD_LAZY | RTLD_LOCAL | RTLD_NOLOAD);
-	if (!vdso) {
-		printf("[WARN]\tfailed to find vDSO\n");
-		return;
-	}
-
-	vdso_gtod = (gtod_t)dlsym(vdso, "__vdso_gettimeofday");
-	if (!vdso_gtod)
-		printf("[WARN]\tfailed to find gettimeofday in vDSO\n");
-
-	vdso_gettime = (vgettime_t)dlsym(vdso, "__vdso_clock_gettime");
-	if (!vdso_gettime)
-		printf("[WARN]\tfailed to find clock_gettime in vDSO\n");
-
-	vdso_time = (time_func_t)dlsym(vdso, "__vdso_time");
-	if (!vdso_time)
-		printf("[WARN]\tfailed to find time in vDSO\n");
-
-	vdso_getcpu = (getcpu_t)dlsym(vdso, "__vdso_getcpu");
-	if (!vdso_getcpu) {
-		/* getcpu() was never wired up in the 32-bit vDSO. */
-		printf("[%s]\tfailed to find getcpu in vDSO\n",
-		       sizeof(long) == 8 ? "WARN" : "NOTE");
-	}
+	printf("[FAIL]\t%s\n", format);
+	fail_num++;
+	return 1;
 }
 
-int failed(const char *format)
+static int pass_case(const char *format)
 {
-	printf("[FAIL]\t %s\n", format);
-	exit(1);
-}
-
-static int check_result(void)
-{
-	if (result >= 1) {
-		printf("Check result pass:%d\n", result);
-		return 0;
-	} else {
-		printf("Check result failed:%d\n", result);
-		exit(1);
-	}
+	printf("[PASS]\t%s\n", format);
+	pass_num++;
+	return 0;
 }
 
 static int init_vsys(void)
 {
 #ifdef __x86_64__
-	result = 0;
+	int nerrs = 0;
 	FILE *maps;
 	char line[MAPS_LINE_LEN];
 	bool found = false;
 
 	maps = fopen("/proc/self/maps", "r");
 	if (!maps) {
-		printf("[WARN]\tCould not open /proc/self/maps -- assuming vsyscall is r-x\n");
+		printf("[WARN]\tCould not open /proc/self/maps\n");
 		vsyscall_map_r = true;
-		return 1;
+		return 0;
 	}
 
 	while (fgets(line, MAPS_LINE_LEN, maps)) {
@@ -180,7 +103,7 @@ static int init_vsys(void)
 		void *start, *end;
 		char name[MAPS_LINE_LEN];
 
-		/* sscanf() is safe here as strlen(name) >= strlen(line) */
+		/* sscanf() is safe as strlen(name) >= strlen(line) */
 		if (sscanf(line, "%p-%p %c-%cp %*x %*x:%*x %*u %s",
 			   &start, &end, &r, &x, name) != 5)
 			continue;
@@ -192,14 +115,13 @@ static int init_vsys(void)
 
 		if (start != (void *)0xffffffffff600000 ||
 		    end != (void *)0xffffffffff601000) {
-			printf("[FAIL]\taddress range is nonsense\n");
-			return 1;
+			fail_case("address range is nonsense\n");
 		}
 
 		printf("\tvsyscall permissions are %c-%c\n", r, x);
 		vsyscall_map_r = (r == 'r');
 		vsyscall_map_x = (x == 'x');
-		printf("[WARN]\tr:%d, x:%d, should not readable in lass\n",
+		printf("vsyscall_map_r:%d, vsyscall_map_x:%d\n",
 			vsyscall_map_r, vsyscall_map_x);
 
 		found = true;
@@ -209,13 +131,15 @@ static int init_vsys(void)
 	fclose(maps);
 
 	if (!found) {
-		printf("[PASS]\tno vsys map in /proc/self/maps in lass\n");
+		printf("\tno vsyscall map in /proc/self/maps\n");
 		vsyscall_map_r = false;
 		vsyscall_map_x = false;
-		result++;
 	}
+
+	return nerrs;
+#else
+	return 0;
 #endif
-	//check_result();
 }
 
 void dump_buffer(unsigned char *buf, int size)
@@ -243,7 +167,7 @@ static int test_vsys_r(void)
 #ifdef __x86_64__
 	printf("[RUN]\tChecking read access to the vsyscall page\n");
 	if (sigsetjmp(jmpbuf, 1) == 0) {
-		printf("sigsetjmp *(int *)0xffffffffff600000\n");
+		printf("Access 0xffffffffff600000\n");
 		a = *(int *)0xffffffffff600000;
 		printf("0xffffffffff600000 content:%d\n", a);
 		can_read = true;
@@ -252,18 +176,12 @@ static int test_vsys_r(void)
 	}
 	printf("can_read:%d, vsyscall_map_r:%d\n",
 		can_read, vsyscall_map_r);
-	if (can_read && !vsyscall_map_r) {
-		printf("[FAIL]\tWe have read access, but we shouldn't\n");
-		return 1;
-	} else if (!can_read && vsyscall_map_r) {
-		printf("[FAIL]\tWe don't have read access, but we should\n");
-		return 1;
-	} else if (can_read) {
-		printf("[OK]\tWe have read access\n");
-	} else {
-		printf("[OK]\tWe do not have read access: #PF(0x%lx)\n",
-			   segv_err);
-	}
+	if (vsyscall_map_r)
+		printf("[WARN]\tvsyscall should not set read for lass\n");
+	if (can_read)
+		fail_case("Could read vsyscall address when lass enabled");
+	else
+		pass_case("Could not read vsyscall addr when lass enabled");
 #endif
 
 	return 0;
@@ -307,24 +225,25 @@ static int test_process_vm_readv(void)
 	remote.iov_base = (void *)0xffffffffff600000;
 	remote.iov_len = 4096;
 
-	printf("-> buf before copy:\n");
+	printf("buf before copy:\n");
 	dump_buffer(buf, 4096);
 
 	ret = process_vm_readv(getpid(), &local, 1, &remote, 1, 0);
-	printf("-> After process_vm_readv copy to buf\n");
+	printf("After process_vm_readv copy to buf\n");
 	dump_buffer(buf, 4096);
 
 	if (ret != 4096) {
 		printf("[OK]\tprocess_vm_readv failed (ret=%d, errno=%d)\n",
 			ret, errno);
+		pass_case("Could not process_vm_readv when lass enabled");
 		return 0;
 	}
 
 	if (vsyscall_map_r) {
-		if (!memcmp(buf, (const void *)0xffffffffff600000, 4096)) {
-			printf("[OK]\tRead correct data\n");
-		} else {
-			printf("[FAIL]\tRead but incorrect data\n");
+		if (!memcmp(buf, (const void *)0xffffffffff600000, 4096))
+			pass_case("Read correct data");
+		else {
+			fail_case("read but incorrect data");
 			return 1;
 		}
 	}
@@ -405,37 +324,33 @@ int dump_vsyscall_key_address(void)
 		*a400, *(a400 + 1), *(a400 + 2));
 	printf("a800:%x, 808:%x  812:%x\n",
 		*a800, *(a800 + 1), *(a800 + 2));
+
 	return 0;
 }
 
 int test_gtod(void)
 {
-	long ret_vsys = -1, ret_vdso = -1;
-	struct timeval tv_sys1, tv_sys2, tv_vsys, tv_vdso;
-	struct timezone tz_sys, tz_vsys, tz_vdso;
+	long ret_vsys = -1;
+	struct timeval tv_vsys, tv_sys;
+	struct timezone tz_vsys, tz_sys;
 
-	printf("[RUN]\ttest gettimeofday()\n");
-	if (sys_gtod(&tv_sys1, &tz_sys) != 0)
-		failed("syscall gettimeofday");
+	printf("[RUN]\ttest gettimeofday\n");
+
+	ret_vsys = sys_gtod(&tv_sys, &tz_sys);
+	if (ret_vsys)
+		fail_case("test sys gettimeofday failed");
 
 	if (vsyscall_map_x) {
 		printf("execute vgtod\n");
 		ret_vsys = vgtod(&tv_vsys, &tz_vsys);
+		if (ret_vsys)
+			fail_case("vgtod failed");
 	}
+	printf("tv_sys.sec:%ld usec:%ld ret:%ld, &tv:%p, &tz:%p\n",
+		tv_sys.tv_sec, tv_sys.tv_usec, ret_vsys, &tv_sys, &tz_sys);
 
-	if (vdso_gtod)
-		printf("access vdso_gtod!\n");
-	ret_vdso = vdso_gtod(&tv_vdso, &tz_vdso);
-
-	if (vdso_gtod) {
-		if (ret_vdso == 0) {
-			check_gtod(&tv_sys1, &tv_sys2, &tz_sys, "vDSO", &tv_vdso, &tz_vdso);
-		} else {
-			printf("[FAIL]\tvDSO gettimeofday() failed: %ld\n", ret_vdso);
-			exit(1);
-		}
-	}
-
+	if(!ret_vsys)
+		pass_case("test gettimeofday pass");
 	return ret_vsys;
 }
 
@@ -457,7 +372,6 @@ int main(int argc, char *argv[])
 	}
 
 	sethandler(SIGSEGV, sigsegv, 0);
-	init_vdso();
 	init_vsys();
 
 	switch (parm) {
@@ -492,4 +406,7 @@ int main(int argc, char *argv[])
 	default:
 		usage();
 	}
+	printf("[Results] pass_num:%d, fail_num:%d\n",
+		pass_num, fail_num);
+	return !(!fail_num);
 }
