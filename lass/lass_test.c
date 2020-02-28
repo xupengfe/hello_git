@@ -234,7 +234,7 @@ static int test_process_vm_readv(void)
 			ret, errno);
 		pass_case("Could not process_vm_readv as expected");
 		return 0;
-	} else
+	}
 
 	if (vsyscall_map_r) {
 		if (memcmp(buf, (const void *)0xffffffffff600000, 4096))
@@ -353,7 +353,7 @@ static int test_emulation(void)
 		   (is_native ? "FAIL" : "OK"),
 		   (is_native ? "native" : "emulated"),
 		   (int)num_vsyscall_traps);
-	if(is_native)
+	if (is_native)
 		fail_case("It's native mode, traps num more than 1");
 	else
 		pass_case("Not native mode, traps num is 1");
@@ -382,7 +382,7 @@ int test_gtod(void)
 	printf("tv_sys.sec:%ld usec:%ld ret:%ld, &tv:%p, &tz:%p\n",
 		tv_sys.tv_sec, tv_sys.tv_usec, ret_vsys, &tv_sys, &tz_sys);
 
-	if(!ret_vsys)
+	if (!ret_vsys)
 		pass_case("test gettimeofday pass");
 	return ret_vsys;
 }
