@@ -241,9 +241,12 @@ static int test_gtod(void)
 	//printf("vdso_gtod:%lx\n", vdso_gtod);
 	if (vdso_gtod)
 		printf("access vdso_gtod!\n");
-		ret_vdso = vdso_gtod(&tv_vdso, &tz_vdso);
-	if (vsyscall_map_x)
+	ret_vdso = vdso_gtod(&tv_vdso, &tz_vdso);
+	if (vsyscall_map_x) {
+		printf("execute vgtod\n");
 		ret_vsys = vgtod(&tv_vsys, &tz_vsys);
+	}
+
 	if (sys_gtod(&tv_sys2, &tz_sys) != 0)
 		err(1, "syscall gettimeofday");
 

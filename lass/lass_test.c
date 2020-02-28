@@ -25,6 +25,7 @@
 #include <sys/uio.h>
 
 #define X86_EFLAGS_TF (1UL << 8)
+#define MAPS_LINE_LEN 128
 
 #ifdef __x86_64__
 # define VSYS(x) (x)
@@ -33,14 +34,14 @@
 #endif
 
 static sig_atomic_t num_vsyscall_traps;
-static int sig_num;
+static int sig_num, result;
 static jmp_buf jmpbuf;
 
 /*
- * file /proc/self/maps contain 'r':vsyscall map:
- * 'r':vsyscall map: ffffffffff600000-ffffffffff601000 r-xp
+ * /proc/self/maps, r means readable, x means excutable
+ * vsyscall map: ffffffffff600000-ffffffffff601000 r-xp
  */
-bool vsyscall_map_r = true;
+bool vsyscall_map_r = false, vsyscall_map_x = false;
 static unsigned long segv_err;
 
 typedef long (*gtod_t)(struct timeval *tv, struct timezone *tz);
@@ -60,6 +61,89 @@ int usage(void)
 	printf("e  Test vsyscall emulation\n");
 	printf("a  Test all\n");
 	exit(2);
+}
+
+static int fail_case(const char *format)
+{
+	printf("[FAIL]\t%s\n", format);
+	exit(1);
+}
+
+static int pass_case(const char *format)
+{
+	printf("[PASS]\t%s\n", format);
+	return 0;
+}
+
+static int check_result(void)
+{
+	if (result >= 1) {
+		printf("result:%d\n", result);
+		pass_case("result >= 1");
+		return 0;
+	} else {
+		printf("result:%d\n", result);
+		fail_case("result < 1");
+	}
+}
+
+static int init_vsys(void)
+{
+#ifdef __x86_64__
+	int nerrs = 0;
+	FILE *maps;
+	char line[MAPS_LINE_LEN];
+	bool found = false;
+
+	maps = fopen("/proc/self/maps", "r");
+	if (!maps) {
+		printf("[WARN]\tCould not open /proc/self/maps\n");
+		vsyscall_map_r = true;
+		return 0;
+	}
+
+	while (fgets(line, MAPS_LINE_LEN, maps)) {
+		char r, x;
+		void *start, *end;
+		char name[MAPS_LINE_LEN];
+
+		/* sscanf() is safe as strlen(name) >= strlen(line) */
+		if (sscanf(line, "%p-%p %c-%cp %*x %*x:%*x %*u %s",
+			   &start, &end, &r, &x, name) != 5)
+			continue;
+
+		if (strcmp(name, "[vsyscall]"))
+			continue;
+
+		printf("\tvsyscall map: %s", line);
+
+		if (start != (void *)0xffffffffff600000 ||
+		    end != (void *)0xffffffffff601000) {
+			fail_case("address range is nonsense\n");
+		}
+
+		printf("\tvsyscall permissions are %c-%c\n", r, x);
+		vsyscall_map_r = (r == 'r');
+		vsyscall_map_x = (x == 'x');
+		printf("vsyscall_map_r:%d, vsyscall_map_x:%d\n",
+			vsyscall_map_r, vsyscall_map_x);
+
+		found = true;
+		break;
+	}
+
+	fclose(maps);
+
+	if (!found) {
+		printf("\tno vsyscall map in /proc/self/maps\n");
+		vsyscall_map_r = false;
+		vsyscall_map_x = false;
+	}
+
+	return nerrs;
+#else
+	return 0;
+#endif
 }
 
 void dump_buffer(unsigned char *buf, int size)
@@ -87,7 +171,7 @@ static int test_vsys_r(void)
 #ifdef __x86_64__
 	printf("[RUN]\tChecking read access to the vsyscall page\n");
 	if (sigsetjmp(jmpbuf, 1) == 0) {
-		printf("sigsetjmp *(int *)0xffffffffff600000\n");
+		printf("Access 0xffffffffff600000\n");
 		a = *(int *)0xffffffffff600000;
 		printf("0xffffffffff600000 content:%d\n", a);
 		can_read = true;
@@ -96,18 +180,12 @@ static int test_vsys_r(void)
 	}
 	printf("can_read:%d, vsyscall_map_r:%d\n",
 		can_read, vsyscall_map_r);
-	if (can_read && !vsyscall_map_r) {
-		printf("[FAIL]\tWe have read access, but we shouldn't\n");
-		return 1;
-	} else if (!can_read && vsyscall_map_r) {
-		printf("[FAIL]\tWe don't have read access, but we should\n");
-		return 1;
-	} else if (can_read) {
-		printf("[OK]\tWe have read access\n");
-	} else {
-		printf("[OK]\tWe do not have read access: #PF(0x%lx)\n",
-			   segv_err);
-	}
+	if (vsyscall_map_r)
+		printf("[WARN]\tvsyscall should not set read for lass\n");
+	if (can_read)
+		fail_case("Could read vsyscall address when lass enabled");
+	else
+		pass_case("Could not read vsyscall addr when lass enabled");
 #endif
 
 	return 0;
@@ -283,6 +361,7 @@ int main(int argc, char *argv[])
 	}
 
 	sethandler(SIGSEGV, sigsegv, 0);
+	init_vsys();
 
 	switch (parm) {
 	case 'g':
