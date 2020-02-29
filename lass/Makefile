@@ -1,4 +1,5 @@
-BIN = t1 t2 t3 test test_vsyscall sigsetjump lass_test
+BIN = t1 t2 t3 test test_vsyscall sigsetjump lass_test \
+        clflush
 
 all: $(BIN)
 
