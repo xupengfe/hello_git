@@ -206,8 +206,11 @@ static void sigsegv(int sig, siginfo_t *info, void *ctx_void)
 	ucontext_t *ctx = (ucontext_t *)ctx_void;
 
 	segv_err =  ctx->uc_mcontext.gregs[REG_ERR];
-	printf("Received sig:%d, si_code:%d, REG_ERR:0x%x\n",
-		sig, info->si_code, REG_ERR);
+	unsigned long ip = ctx->uc_mcontext.gregs[REG_RIP];
+	unsigned long bp = ctx->uc_mcontext.gregs[REG_RBP];
+
+	printf("Received sig:%d,si_code:%d,ip:0x%lx,bp:0x%lx\n",
+		sig, info->si_code, ip, bp);
 	siglongjmp(jmpbuf, 1);
 }
 
@@ -332,7 +335,7 @@ static void sigtrap(int sig, siginfo_t *info, void *ctx_void)
 static int test_emulation(void)
 {
 	time_t tmp = 0;
-	bool is_native, can_exec;
+	bool is_native;
 
 	num_vsyscall_traps = 0;
 	if (!vsyscall_map_x) {
