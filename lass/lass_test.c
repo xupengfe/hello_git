@@ -169,7 +169,7 @@ static int test_vsys_r(void)
 	if (sigsetjmp(jmpbuf, 1) == 0) {
 		printf("Access 0xffffffffff600000\n");
 		a = *(int *)0xffffffffff600000;
-		printf("0xffffffffff600000 content:%d\n", a);
+		printf("0xffffffffff600000 content:0x%x\n", a);
 		can_read = true;
 	} else {
 		can_read = false;
