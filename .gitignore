@@ -1,3 +1,6 @@
 ax
 cpu_feature
 cpuid
+hello
+hello_ins
+hello_sys
