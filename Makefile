@@ -1,4 +1,5 @@
-BIN = ax cpuid cpu_feature hello hello_ins hello_sys
+BIN = ax cpuid cpu_feature hello hello_ins hello_sys \
+        uname uname_sys
 
 all: $(BIN)
 
