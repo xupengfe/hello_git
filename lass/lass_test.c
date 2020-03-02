@@ -39,7 +39,7 @@ static jmp_buf jmpbuf;
 
 /*
  * /proc/self/maps, r means readable, x means excutable
- * vsyscall map: ffffffffff600000-ffffffffff601000 r-xp
+ * vsyscall map: ffffffffff600000-ffffffffff601000
  */
 bool vsyscall_map_r = false, vsyscall_map_x = false;
 static unsigned long segv_err;
@@ -62,7 +62,7 @@ int usage(void)
 	printf("g  Test call 0xffffffffff600000\n");
 	printf("r  Test read 0xffffffffff600000\n");
 	printf("v  Test process_vm_readv read address\n");
-	printf("d  Test vsyscall trigger correct page fault\n");
+	printf("d  Test vsyscall trigger page fault or not\n");
 	printf("t  Test syscall gettimeofday\n");
 	printf("e  Test vsyscall emulation\n");
 	printf("a  Test all\n");
@@ -316,11 +316,15 @@ static void sigtrap(int sig, siginfo_t *info, void *ctx_void)
 {
 	ucontext_t *ctx = (ucontext_t *)ctx_void;
 	unsigned long ip = ctx->uc_mcontext.gregs[REG_RIP];
-
+	unsigned long bp = ctx->uc_mcontext.gregs[REG_RBP];
+	/* Check sig number and rip rbp progress, block test
+	 *printf("sig_num:%d, ip:%lx, rbp:%lx\n",
+	 *	sig_num, ip, bp);
+	 */
 	sig_num++;
 	if (((ip ^ 0xffffffffff600000UL) & ~0xfffUL) == 0) {
-		printf("Got sig:%d,si_code:%d,ip:%lx,REG_RIP:%d,sig_num:%d\n",
-		sig, info->si_code, ip, REG_RIP, sig_num);
+		printf("Got sig:%d,si_code:%d,ip:%lx,rbp:%lx,sig_num:%d\n",
+		sig, info->si_code, ip, bp, sig_num);
 		num_vsyscall_traps++;
 	}
 }
@@ -328,14 +332,22 @@ static void sigtrap(int sig, siginfo_t *info, void *ctx_void)
 static int test_emulation(void)
 {
 	time_t tmp = 0;
-	bool is_native;
+	bool is_native, can_exec;
+
+	num_vsyscall_traps = 0;
+	if (!vsyscall_map_x) {
+		printf("Could not execute vsyscall\n");
+		fail_case("Should execute vsyscall as expected\n");
+		return 1;
+	}
 
 	printf("[RUN]\tchecking vsyscall is emulated\n");
 	sethandler(SIGTRAP, sigtrap, 0);
 	set_eflags(get_eflags() | X86_EFLAGS_TF);
 	printf("&tmp:%p, tmp:%lx\n", &tmp, tmp);
 	vtime(&tmp);
-	printf("&tmp:%p, tmp:%lx\n", &tmp, tmp);
+	printf("&tmp:%p, tmp:%lx,sig_num:%d\n",
+		&tmp, tmp, sig_num);
 	set_eflags(get_eflags() & ~X86_EFLAGS_TF);
 
 	/*
