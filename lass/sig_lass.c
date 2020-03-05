@@ -101,8 +101,8 @@ int get_kernel_random(void)
 	unsigned long a, b;
 
 	/* this is for some special time test
-	   srand((unsigned) (time(NULL)));
-	*/
+	 * srand((unsigned) (time(NULL)));
+	 */
 	a = rand();
 	b = rand();
 	kernel_random_addr = ((a<<32) | 0xffff800000000000ul) | b;
@@ -115,7 +115,7 @@ int read_kernel_random(void)
 	int i;
 
 	printf("Test kernel random addr for lass:\n");
-	for(i=1; i<=TEST_NUM; i++) {
+	for (i = 1; i <= TEST_NUM; i++) {
 		printf("\t%d times test:\n", i);
 		get_kernel_random();
 		read_kernel_linear(kernel_random_addr);
