@@ -60,7 +60,7 @@ void segv_handler(int signum, siginfo_t *si, void *uc)
 	trap = ucp->uc_mcontext.gregs[REG_TRAPNO];
 	di = ucp->uc_mcontext.gregs[REG_RDI];
 	rsi = ucp->uc_mcontext.gregs[REG_RSI];
-	ucp->uc_mcontext.gregs[REG_RDI];
+
 	printf("sig:%d,no:%d,err:%d,si_code:%d,rerr:%ld,ip:%lx,bp:%lx\n",
 		signum, si->si_signo, si->si_errno, si->si_code,
 		sig_err, ip, bp);
@@ -143,7 +143,7 @@ int check_kernel_random(void)
 int main(int argc, char *argv[])
 {
 	char parm;
-	int r, record;
+	int r;
 	struct sigaction sa;
 
 	r = sigemptyset(&sa.sa_mask);
