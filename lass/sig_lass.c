@@ -5,23 +5,30 @@
  *  Author: Pengfei, Xu <pengfei.xu@intel.com>
  */
 
+#define _GNU_SOURCE
 #include <stdio.h>
 #include <signal.h>
 #include <stdlib.h>
 #include <time.h>
+#include <setjmp.h>
 
 #define VSYS_ADDR 0xffffffffff600000
 #define ILLEGAL_ADDR 0xffffffffff601000
+#define KERNEL_BORDER_ADDR 0xffff800000000000
+#define TEST_NUM 100
 
 static int pass_num, fail_num;
+static jmp_buf jmpbuf;
+static unsigned long kernel_random_addr;
 
 int usage(void)
 {
-	printf("Usage: [u|v|r|]\n");
-	printf("u  Read one illegal kernel space\n");
+	printf("Usage: [i|v|r|a]\n");
+	printf("i  Read one illegal kernel space\n");
 	printf("v  Read legal vsyscall address\n");
 	printf("r  Read random kernel space\n");
-	exit(2);
+	printf("a  Test all\n");
+	return 2;
 }
 
 static int fail_case(const char *format)
@@ -40,62 +47,103 @@ static int pass_case(const char *format)
 
 void segv_handler(int signum, siginfo_t *si, void *uc)
 {
-	printf("sig:%d, no:%d, err:%d, si_code:%d\n",
-		signum, si->si_signo, si->si_errno, si->si_code);
+	unsigned long sig_err, ip, bp, ax, bx, cx, dx, trap, di, rsi;
+	ucontext_t *ucp = (ucontext_t *)uc;
+
+	sig_err =  ucp->uc_mcontext.gregs[REG_ERR];
+	ip = ucp->uc_mcontext.gregs[REG_RIP];
+	bp = ucp->uc_mcontext.gregs[REG_RBP];
+	ax = ucp->uc_mcontext.gregs[REG_RAX];
+	bx = ucp->uc_mcontext.gregs[REG_RBX];
+	cx = ucp->uc_mcontext.gregs[REG_RCX];
+	dx = ucp->uc_mcontext.gregs[REG_RDX];
+	trap = ucp->uc_mcontext.gregs[REG_TRAPNO];
+	di = ucp->uc_mcontext.gregs[REG_RDI];
+	rsi = ucp->uc_mcontext.gregs[REG_RSI];
+	ucp->uc_mcontext.gregs[REG_RDI];
+	printf("sig:%d,no:%d,err:%d,si_code:%d,rerr:%ld,ip:%lx,bp:%lx\n",
+		signum, si->si_signo, si->si_errno, si->si_code,
+		sig_err, ip, bp);
+	printf("ax:%lx,bx:%lx,cx:%lx,dx:%lx,trap:%lx,di:%lx,rsi:%lx\n",
+		ax, bx, cx, dx, trap, di, rsi);
 	if (si->si_code == 128) {
 		pass_case("Got #GP as expected for lass");
-		exit(0);
 	} else {
 		printf("Got unexpected si_code:%d for lass\n",
 			si->si_code);
 		fail_case("Got unexpected si_code signal");
-		exit(1);
 	}
-	exit(1);
+	siglongjmp(jmpbuf, 1);
 }
 
-int read_vsys_addr(void)
+int read_kernel_linear(unsigned long addr)
 {
-	int hack_a;
+	int addr_content;
 
-	printf("VSYS_ADDR:0x%lx\n", VSYS_ADDR);
-	hack_a = *(const int *)VSYS_ADDR;
-	printf("0x%lx content:0x%x\n", VSYS_ADDR, hack_a);
-	fail_case("should not read vsyscall space for lass");
-	return 1;
+	if (addr < KERNEL_BORDER_ADDR) {
+		printf("addr:0x%lx is smaller than 0x%lx\n",
+			addr, KERNEL_BORDER_ADDR);
+		fail_case("Set addr error");
+		return 1;
+	}
+	printf("Kernel linear addr:0x%lx\n", addr);
+	if (sigsetjmp(jmpbuf, 1) == 0) {
+		addr_content = *(const int *)addr;
+		printf("0x%lx content:0x%x\n", addr, addr_content);
+		fail_case("should not read kernel linear addr for lass");
+	}
+
+	return 0;
 }
 
-int read_kernel_addr(void)
+int get_kernel_random(void)
 {
-	int kernel_addr;
+	unsigned long a, b;
 
-	printf("ILLEGAL_ADDR:0x%lx\n", ILLEGAL_ADDR);
-	kernel_addr = *(const int *)ILLEGAL_ADDR;
-	printf("0x%lx content:0x%x\n", ILLEGAL_ADDR, kernel_addr);
-	fail_case("should not read kernel space for lass");
-	return 1;
+	/* this is for some special time test
+	   srand((unsigned) (time(NULL)));
+	*/
+	a = rand();
+	b = rand();
+	kernel_random_addr = ((a<<32) | 0xffff800000000000ul) | b;
+
+	return 0;
 }
 
 int read_kernel_random(void)
 {
-	unsigned long a, b, addr;
-	int addr_content;
+	int i;
 
-	srand((unsigned) (time(NULL)));
-	a = rand();
-	b = rand();
-	addr = ((a<<32) | 0xffff800000000000ul) | b;
-	printf("kernel space random addr:0x%lx\n", addr);
-	addr_content = *(const int *)addr;
-	printf("0x%lx content:0x%x\n", addr, addr_content);
-	fail_case("should not read random kernel space");
-	return 1;
+	printf("Test kernel random addr for lass:\n");
+	for(i=1; i<=TEST_NUM; i++) {
+		printf("\t%d times test:\n", i);
+		get_kernel_random();
+		read_kernel_linear(kernel_random_addr);
+	}
+
+	return 0;
+}
+
+int check_kernel_random(void)
+{
+	int record_fail, record_pass;
+
+	record_fail = fail_num;
+	record_pass = pass_num;
+	read_kernel_random();
+	if (fail_num > record_fail) {
+		fail_num = record_fail + 1;
+		pass_num = record_pass;
+	} else
+		pass_num = record_pass + 1;
+
+	return 0;
 }
 
 int main(int argc, char *argv[])
 {
 	char parm;
-	int r;
+	int r, record;
 	struct sigaction sa;
 
 	r = sigemptyset(&sa.sa_mask);
@@ -113,6 +161,7 @@ int main(int argc, char *argv[])
 
 	if (argc == 1) {
 		usage();
+		return 2;
 	} else if (argc == 2) {
 		if (sscanf(argv[1], "%c", &parm) != 1) {
 			printf("Invalid parm:%c\n", parm);
@@ -125,17 +174,24 @@ int main(int argc, char *argv[])
 
 	switch (parm) {
 	case 'v':
-		read_vsys_addr();
+		read_kernel_linear(VSYS_ADDR);
 		break;
-	case 'u':
-		read_kernel_addr();
+	case 'i':
+		read_kernel_linear(ILLEGAL_ADDR);
 		break;
 	case 'r':
-		read_kernel_random();
+		check_kernel_random();
+		break;
+	case 'a':
+		read_kernel_linear(VSYS_ADDR);
+		read_kernel_linear(ILLEGAL_ADDR);
+		check_kernel_random();
 		break;
 	default:
 		usage();
 	}
 
+	printf("[Results] pass_num:%d, fail_num:%d\n",
+		pass_num, fail_num);
 	return !(!fail_num);
 }
