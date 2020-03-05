@@ -170,6 +170,7 @@ int main(int argc, char *argv[])
 		printf("parm:%c\n", parm);
 	} else {
 		usage();
+		return 2;
 	}
 
 	switch (parm) {
@@ -189,6 +190,7 @@ int main(int argc, char *argv[])
 		break;
 	default:
 		usage();
+		return 2;
 	}
 
 	printf("[Results] pass_num:%d, fail_num:%d\n",
