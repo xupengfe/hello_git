@@ -1,6 +1,6 @@
 // SPDX-License-Identifier: GPL-2.0-or-later
 /*
- *  lass_test.c
+ *  sig_lass.c
  *  Copyright (C) 2020 Intel Corporation
  *  Author: Pengfei, Xu <pengfei.xu@intel.com>
  */
