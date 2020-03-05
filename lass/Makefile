@@ -1,5 +1,5 @@
 BIN = t1 t2 t3 t4 test test_vsyscall sigsetjump lass_test \
-        clflush value sig_lass sig_lass_ori
+        clflush value sig_lass_check ori_sig_lass
 
 all: $(BIN)
 
