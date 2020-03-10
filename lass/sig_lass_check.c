@@ -11,11 +11,16 @@
 #include <stdlib.h>
 #include <time.h>
 #include <setjmp.h>
+#include <sys/time.h>
 
 #define VSYS_ADDR 0xffffffffff600000
 #define ILLEGAL_ADDR 0xffffffffff601000
 #define KERNEL_BORDER_ADDR 0xffff800000000000
 #define TEST_NUM 100
+
+#define VSYS(x) (x)
+
+typedef long (*gtod_t)(struct timeval *tv, struct timezone *tz);
 
 static int pass_num, fail_num;
 static jmp_buf jmpbuf;
@@ -23,7 +28,9 @@ static unsigned long kernel_random_addr;
 
 int usage(void)
 {
-	printf("Usage: [i|v|r|a]\n");
+	printf("Usage: [e|f|i|v|r|a]\n");
+	printf("e  Execute vsyscall addr should trigger #GP\n");
+	printf("f  Execute random kernel addr should trigger #GP\n");
 	printf("i  Read one illegal kernel space\n");
 	printf("v  Read legal vsyscall address\n");
 	printf("r  Read random kernel space\n");
@@ -96,6 +103,27 @@ int read_kernel_linear(unsigned long addr)
 	return 0;
 }
 
+int execute_kernel_linear(unsigned long kernel_addr)
+{
+	struct timeval tv;
+	struct timezone tz;
+	gtod_t vgtod;
+
+	if (kernel_addr < KERNEL_BORDER_ADDR) {
+		printf("kernel addr:0x%lx is smaller than 0x%lx\n",
+			kernel_addr, KERNEL_BORDER_ADDR);
+		fail_case("Set kernel addr error");
+		return 1;
+	}
+	printf("Execute kernel linear addr:0x%lx\n", kernel_addr);
+	if (sigsetjmp(jmpbuf, 1) == 0) {
+		vgtod = (gtod_t)VSYS(kernel_addr);
+		vgtod(&tv, &tz);
+		fail_case("should not execute vsyscall with kernel addr\n");
+	}
+	return 0;
+}
+
 int get_kernel_random(void)
 {
 	unsigned long a, b;
@@ -120,6 +148,13 @@ int read_kernel_random(void)
 		get_kernel_random();
 		read_kernel_linear(kernel_random_addr);
 	}
+	return 0;
+}
+
+int execute_kernel_random(void)
+{
+	get_kernel_random();
+	execute_kernel_linear(kernel_random_addr);
 
 	return 0;
 }
@@ -183,10 +218,18 @@ int main(int argc, char *argv[])
 	case 'r':
 		check_kernel_random();
 		break;
+	case 'e':
+		execute_kernel_linear(VSYS_ADDR);
+		break;
+	case 'f':
+		execute_kernel_random();
+		break;
 	case 'a':
 		read_kernel_linear(VSYS_ADDR);
 		read_kernel_linear(ILLEGAL_ADDR);
 		check_kernel_random();
+		execute_kernel_linear(VSYS_ADDR);
+		execute_kernel_random();
 		break;
 	default:
 		usage();
