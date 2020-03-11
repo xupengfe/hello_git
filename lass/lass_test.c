@@ -274,7 +274,7 @@ static int test_vsys_x(void)
 	if (vsyscall_map_x)
 		printf("It's executable as expected for lass\n");
 	else
-		printf("[WARN]\tIt's not executable vsyscall\n");
+		printf("Sysfile show that vsyscall is not executable\n");
 
 	printf("[RUN]\tMake sure that vsyscalls is executable\n");
 	if (sigsetjmp(jmpbuf, 1) == 0) {
@@ -290,11 +290,11 @@ static int test_vsys_x(void)
 	} else if (segv_err & (1 << 4)) { /* INSTR */
 		printf("Right page fault(& 0x%x): #PF(0x%lx)\n",
 		    (1 << 4), segv_err);
-		fail_case("Should no page fault with correct err");
+		pass_case("Get correct reg_err when execute vsyscall");
 	} else {
-		printf("Page fault with wrong error: #PF(0x%lx)\n",
-		    segv_err);
-		fail_case("Trigger wrong page fault");
+		printf("Wrong reg_err: #PF(0x%lx), expected:(& 0x%x)\n",
+		    segv_err, (1 << 4));
+		fail_case("Trigger wrong page fault for lass");
 		return 1;
 	}
 #endif
@@ -340,7 +340,7 @@ static int test_emulation(void)
 	num_vsyscall_traps = 0;
 	if (!vsyscall_map_x) {
 		printf("Could not execute vsyscall\n");
-		fail_case("Should execute vsyscall as expected\n");
+		pass_case("Sysfile: vsyscall could not be executed\n");
 		return 1;
 	}
 
