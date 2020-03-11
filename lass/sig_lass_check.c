@@ -119,7 +119,10 @@ int execute_kernel_linear(unsigned long kernel_addr)
 	if (sigsetjmp(jmpbuf, 1) == 0) {
 		vgtod = (gtod_t)VSYS(kernel_addr);
 		vgtod(&tv, &tz);
-		fail_case("should not execute vsyscall with kernel addr\n");
+		if (kernel_addr == VSYS_ADDR)
+			pass_case("Execute vsyscall passed\n");
+		else
+			fail_case("should not execute kernel addr\n");
 	}
 	return 0;
 }
