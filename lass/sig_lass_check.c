@@ -14,6 +14,8 @@
 #include <sys/time.h>
 
 #define VSYS_ADDR 0xffffffffff600000
+#define VSYS_VTIME 0xffffffffff600400
+#define VSYS_VGETCPU 0xffffffffff600800
 #define ILLEGAL_ADDR 0xffffffffff601000
 #define KERNEL_BORDER_ADDR 0xffff800000000000
 #define TEST_NUM 100
@@ -83,6 +85,25 @@ void segv_handler(int signum, siginfo_t *si, void *uc)
 	siglongjmp(jmpbuf, 1);
 }
 
+int is_vsys_access_addr(unsigned long addr)
+{
+	int result = 0;
+
+	result = (addr == VSYS_ADDR) || (addr == VSYS_VTIME)
+		|| (addr == VSYS_VGETCPU);
+
+	return result;
+}
+
+int is_vsys_range(unsigned long addr)
+{
+	int result = 0;
+
+	result = (addr >= VSYS_ADDR) && (addr < ILLEGAL_ADDR);
+
+	return result;
+}
+
 int read_kernel_linear(unsigned long addr)
 {
 	int addr_content;
@@ -97,7 +118,10 @@ int read_kernel_linear(unsigned long addr)
 	if (sigsetjmp(jmpbuf, 1) == 0) {
 		addr_content = *(const int *)addr;
 		printf("0x%lx content:0x%x\n", addr, addr_content);
-		fail_case("should not read kernel linear addr for lass");
+		if (is_vsys_range(addr))
+			pass_case("Read vsyscall addr passed\n");
+		else
+			fail_case("should not read non-vsys kernel addr\n");
 	}
 
 	return 0;
@@ -119,7 +143,7 @@ int execute_kernel_linear(unsigned long kernel_addr)
 	if (sigsetjmp(jmpbuf, 1) == 0) {
 		vgtod = (gtod_t)VSYS(kernel_addr);
 		vgtod(&tv, &tz);
-		if (kernel_addr == VSYS_ADDR)
+		if (is_vsys_access_addr(kernel_addr))
 			pass_case("Execute vsyscall passed\n");
 		else
 			fail_case("should not execute kernel addr\n");
