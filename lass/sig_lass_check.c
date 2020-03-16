@@ -31,7 +31,7 @@ static unsigned long kernel_random_addr;
 int usage(void)
 {
 	printf("Usage: [e|f|i|v|r|a]\n");
-	printf("e  Execute vsyscall addr should trigger #GP\n");
+	printf("e  Execute vsyscall addr\n");
 	printf("f  Execute random kernel addr should trigger #GP\n");
 	printf("i  Read one illegal kernel space\n");
 	printf("v  Read legal vsyscall address\n");
