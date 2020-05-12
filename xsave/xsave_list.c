@@ -19,8 +19,11 @@
 #include "xsave_list.h"
 
 #define ALIGN(x, a)	(((x) + (a) - 1) & ~((a) - 1))
+#define TMUL_XSTATE			18
+#define TMUL_EXPANDED_SIZE	576
 
-static int linux_xsave_size, sum_size, align_size;
+
+static int linux_xsave_size, tmul_xsave_size, sum_size, align_size, xstate_num;
 static u64 xfeatures_mask_all;
 
 void usage(char *progname)
@@ -138,7 +141,10 @@ static void print_xstate_feature(u32 xstate_mask)
 	printf("XSAVE 0x%05x| %04d |   %d   | %04d |    %04d    |'%s'\n",
 		xstate_mask, xfeature_size, is_aligned,
 		sum_size, align_size, feature_name);
-	linux_xsave_size = linux_xsave_size+xfeature_size;
+	linux_xsave_size = align_size;
+	/* TMUL xstate will create one more 576 bytes for TMUL expanded area*/
+	if (xstate_mask == TMUL_XSTATE)
+		tmul_xsave_size = linux_xsave_size + TMUL_EXPANDED_SIZE;
 }
 
 int cpu_support_xstate_list(void)
@@ -170,6 +176,7 @@ int cpu_support_xstate_list(void)
 	for (i = 0; i < XFEATURE_MAX; i++) {
 		if (!(xfeatures_mask_all & (1 << i)))
 			continue;
+		xstate_num++;
 		print_xstate_feature(i);
 	}
 	return 0;
@@ -236,12 +243,16 @@ int main(int argc, char *argv[])
 	cpuid_count(XSTATE_CPUID, 0, &eax, &ebx, &ecx, &edx);
 	cpu_max_xsave_size = ebx;
 
-	printf("CPU could support XSAVE total size:%d(0x%x), max:0d%d\n",
-		cpu_xsave_size, cpu_xsave_size, cpu_max_xsave_size);
 	cpu_support_xstate_list();
+	printf("This CPU supports %d xstates.\n", xstate_num);
+	printf("CPUID XSAVE size:0D%d(0x%x), max:0D%d, linux_xsave_size:0D%d\n",
+		cpu_xsave_size, cpu_xsave_size, cpu_max_xsave_size,
+		linux_xsave_size);
 	if (cpu_xsave_size != linux_xsave_size)
 		printf("WARN:cpu_xsave_size:%d not equal to linux:%d, max:%d\n",
 			cpu_xsave_size, linux_xsave_size, cpu_max_xsave_size);
+	if (tmul_xsave_size > 0)
+		printf("TMUL XSAVE SIZE:0D%d\n", tmul_xsave_size);
 	xstate_dump_leaves();
 	return 0;
 }
