@@ -245,14 +245,14 @@ int main(int argc, char *argv[])
 
 	cpu_support_xstate_list();
 	printf("This CPU supports %d xstates.\n", xstate_num);
-	printf("CPUID XSAVE size:0D%d(0x%x), max:0D%d, linux_xsave_size:0D%d\n",
+	printf("CPUID XSAVE size:0d%d(0x%x), max:0d%d, linux_xsave_size:0d%d\n",
 		cpu_xsave_size, cpu_xsave_size, cpu_max_xsave_size,
 		linux_xsave_size);
 	if (cpu_xsave_size != linux_xsave_size)
 		printf("WARN:cpu_xsave_size:%d not equal to linux:%d, max:%d\n",
 			cpu_xsave_size, linux_xsave_size, cpu_max_xsave_size);
 	if (tmul_xsave_size > 0)
-		printf("TMUL XSAVE SIZE:0D%d\n", tmul_xsave_size);
+		printf("TMUL XSAVE SIZE:0d%d\n", tmul_xsave_size);
 	xstate_dump_leaves();
 	return 0;
 }
