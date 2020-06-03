@@ -38,20 +38,22 @@ int main()
 				if((data!=0xffffffff) && (data!=0))
 			 	{
 					printf("\n%02x:%02x:%01x\n",bus,device,func);
-					for(reg=0; reg<16; reg++)
+					//for(reg = 0; reg < 192; reg++)
+					for(reg = 0; reg < 64; reg++)
 					{
-						if(reg%4 == 0)
-						{
-							printf("%02x:", reg * 4);
-						}
 						address = BASE_ADDR | (bus << 16) | (device << 11) | (func << 8) | (reg << 2);
-						outl(address,CONFIG_ADDRESS); //put addr to config_address
+						outl(address , CONFIG_ADDRESS); //put addr to config_address
 						data = inl(CONFIG_DATA); //read data from config data;
-						printf("%02x ",(unsigned char)(data>>0));
-						printf("%02x ",(unsigned char)(data>>8));
-						printf("%02x ",(unsigned char)(data>>16));
-						printf("%02x ",(unsigned char)(data>>24));
-						if(reg%4 == 3)
+						if (data == 0xffffffff)
+							continue;
+						if(reg % 4 == 0)
+							printf("%02x:", reg * 4);
+
+						printf("%02x ",(unsigned char)(data >> 0));
+						printf("%02x ",(unsigned char)(data >> 8));
+						printf("%02x ",(unsigned char)(data >> 16));
+						printf("%02x ",(unsigned char)(data >> 24));
+						if(reg % 4 == 3)
 						printf("\n");
 					}
 				}
