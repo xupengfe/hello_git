@@ -1,4 +1,4 @@
-BIN = pci bus_dev_func
+BIN = pci bus_dev_func pcie
 
 all: $(BIN)
 
