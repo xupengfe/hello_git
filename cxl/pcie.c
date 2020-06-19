@@ -9,10 +9,11 @@
 
 //#define DEBUG1
 
-#define PCI_MAX_BUS 2
-#define PCI_MAX_DEV 31
-#define PCI_MAX_FUN 7
-#define PCI_BASE_ADDR 0xfc000000L
+#define PCI_MAX_BUS 5
+#define PCI_MAX_DEV 32
+#define PCI_MAX_FUN 8
+//#define PCI_BASE_ADDR 0xfc000000L
+#define PCI_BASE_ADDR 0xf8000000
 #define LEN_SIZE sizeof(unsigned long)
 #define SIZE 4096
 
@@ -173,62 +174,70 @@ int main()
       printf("can't open port!\n");
     }
 
-    printf("fd = %d\n",fd);
+    printf("fd = %d, open /dev/mem successfully\n",fd);
 
-     for(bus = 0; bus <= PCI_MAX_BUS; bus++)
-        for(dev = 0; dev <= PCI_MAX_DEV; dev++)
-           for(fun = 0; fun <= PCI_MAX_FUN; fun++)
+    for(bus = 0; bus <= PCI_MAX_BUS; bus++)
+    {  //printf("L1 for bus:%d\n", bus);
+      for(dev = 0; dev <= PCI_MAX_DEV; dev++)
+      {  //printf("L2 for dev:%d\n", dev);
+        for(fun = 0; fun <= PCI_MAX_FUN; fun++)
+        {
+          //printf("bus:%d func:%d dev:%d\n", bus, dev, fun);
+          addr = 0;
+          addr = PCI_BASE_ADDR|(bus<<20)|(dev<<15)|(fun<<12);
+          DATA = mmap(NULL,LEN_SIZE,PROT_READ|PROT_WRITE,MAP_SHARED,fd,addr);
+          if(DATA == (void *)-1)
+          {
+            printf("mmap failed, bus:%d, dev:%d, func:%d\n",
+              bus, dev, fun);
+            munmap(DATA,LEN_SIZE);
+            break;
+          }
+          //printf("bus:%d func:%d dev:%d, *DATA:0x%x\n", bus, dev, fun, *DATA);
+          if(*DATA != 0xffffffff)
+          {
+            nextPoint = (BYTE)(*(DATA+0x34/4));
+            dwDATA = DATA+nextPoint/4;
+            //#ifdef DEBUG1
+            printf("nextpoint = %x\n",nextPoint);
+            printf("addr1=%x\n",*dwDATA);
+            //#endif
+            while(1){
+              if((BYTE)*(dwDATA)==0x10)
               {
-                 addr = 0;
-                 addr = PCI_BASE_ADDR|(bus<<20)|(dev<<15)|(fun<<12);
-                 DATA = mmap(NULL,LEN_SIZE,PROT_READ|PROT_WRITE,MAP_SHARED,fd,addr);
-                 if(DATA == (void *)-1)
-                 {
-                     munmap(DATA,LEN_SIZE);
-                     break;
-                 }
-                 if(*DATA != 0xffffffff)
-                 {
-                    nextPoint = (BYTE)(*(DATA+0x34/4));
-                    dwDATA = DATA+nextPoint/4;
-                     #ifdef DEBUG1
-                    printf("nextpoint = %x\n",nextPoint);
-                    printf("addr1=%x\n",*dwDATA);
-                     #endif
-                 while(1){
-                    if((BYTE)*(dwDATA)==0x10)
-                     {
-                             printf("PCI-E:");
-                             printf("bus# = %x,dev# = %x,fun# = %x\t",bus,dev,fun);
-                             printf("vender id:%.4x\t",*DATA&0xffff);
-                             printf("device id:%.4x\t",((*DATA)>>8)&0XFFFF);
-                             printf("\ntype:");
-                             typeshow((BYTE)((*dwDATA)>>8)|0x0f);
-                             speedshow(*(dwDATA+0x2c/4)>>1&0xf);
-                          //   linkspeedshow(*(dwDATA+0x0c/4)&0xf);
-                             linkwidthshow((*(dwDATA+0x0c/4)>>4)&0x3f);
-                             printf("\n");
-                             break;
-                     }
-                     dwDATA = DATA+((*(dwDATA)>>8)&0xff)/4;
-                     #ifdef DEBUG1
-                     printf("dwDATA = %x\n",*dwDATA);
-                     #endif
-                     if((BYTE)(*(dwDATA)) == 0x00)
-                     break;
-                     }
-                 #ifdef DEBUG
-                    printf("bus = %x,dev = %x,fun = %x\n",bus,dev,fun);
-                    for(i = 0; i < 0;i++)
-                    {
-                        printf("data%d:%x\n",i,*(DATA+i));
-                    }
-                   printf(" next Point:%x\n",nextPoint);
-                   printf("data:%x\n",(BYTE)*(DATA+nextPoint/4));
-                 #endif
-                 }
-                  munmap(DATA,LEN_SIZE);
+                printf("PCI-E:");
+                printf("bus# = %x,dev# = %x,fun# = %x\t",bus,dev,fun);
+                printf("vender id:%.4x\t",*DATA&0xffff);
+                printf("device id:%.4x\t",((*DATA)>>8)&0XFFFF);
+                printf("\ntype:");
+                typeshow((BYTE)((*dwDATA)>>8)|0x0f);
+                speedshow(*(dwDATA+0x2c/4)>>1&0xf);
+                // linkspeedshow(*(dwDATA+0x0c/4)&0xf);
+                linkwidthshow((*(dwDATA+0x0c/4)>>4)&0x3f);
+                printf("\n");
+                break;
               }
+              dwDATA = DATA+((*(dwDATA)>>8)&0xff)/4;
+              #ifdef DEBUG1
+              printf("dwDATA = %x\n",*dwDATA);
+              #endif
+              if((BYTE)(*(dwDATA)) == 0x00)
+              break;
+            }
+            #ifdef DEBUG
+              printf("bus = %x,dev = %x,fun = %x\n",bus,dev,fun);
+              for(i = 0; i < 0;i++)
+              {
+                printf("data%d:%x\n",i,*(DATA+i));
+              }
+              printf(" next Point:%x\n",nextPoint);
+              printf("data:%x\n",(BYTE)*(DATA+nextPoint/4));
+            #endif
+          }
+            munmap(DATA,LEN_SIZE);
+        }
+      }
+    }
     close(fd);
     return 0;
 }
