@@ -6,7 +6,7 @@
 #include<sys/mman.h> //mmap
 #include<fcntl.h>   //open filel
 
-#define MAX_BUS 10  //一般来说到4就够了
+#define MAX_BUS 31 //一般来说到4就够了
 #define MAX_DEV 32
 #define MAX_FUN 8
 #define BASE_ADDR 0xf8000000  //我的电脑的基地址，你的可能不一样哦
@@ -171,7 +171,7 @@ int main()
                    {
                        if((BYTE)(*ptrsearch)==0x10)//capability id of 10h indicating pcie capabilitystructure
                        {
-                            printf("/***************************\n");
+                            printf("\n/***************************\n");
                             printf("PCIE -> %02x:%02x.%x\n",bus, dev, fun);
                             printf("vender id:%x\t",(*ptrdata)&0x0000ffff);
                             printf("device id:%x\n",((*ptrdata)>>8)&0x0000ffff);
