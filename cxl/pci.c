@@ -37,7 +37,7 @@ int main()
 				data = inl(CONFIG_DATA); //read data from config data;
 				if((data!=0xffffffff) && (data!=0))
 			 	{
-					printf("\n%02x:%02x:%01x\n",bus,device,func);
+					printf("\n%02x:%02x.%01x\n",bus,device,func);
 					//for(reg = 0; reg < 192; reg++)
 					for(reg = 0; reg < 64; reg++)
 					{
@@ -47,7 +47,7 @@ int main()
 						if (data == 0xffffffff)
 							continue;
 						if(reg % 4 == 0)
-							printf("%02x:", reg * 4);
+							printf("%02x: ", reg * 4);
 
 						printf("%02x ",(unsigned char)(data >> 0));
 						printf("%02x ",(unsigned char)(data >> 8));

@@ -126,25 +126,26 @@ int main()
     int fd;
     int i;
 
-    fd=open("/dev/mem",O_RDWR);
+    fd = open("/dev/mem",O_RDWR);
     //“/dev/mem”物理內存全映像，可以用來訪問物理內存，一般是open("/dev/mem",O_RD_WR),然後mmap，接著就可以用mmap地址訪問物理內存
 
-    if(fd<0)
+    if(fd < 0)
     {
         printf("openmemory failed!\n");
         return -1;
     }
     printf("fd=%d open /dev/mem successfully.\n",fd);
 
-    for(bus=0; bus<MAX_BUS; ++bus)
+    for(bus = 0; bus < MAX_BUS; ++bus)
     {
-        for(dev=0; dev<MAX_DEV; ++dev)
+        for(dev = 0; dev < MAX_DEV; ++dev)
         {
-            for(fun=0; fun<MAX_FUN; ++fun)
+            for(fun = 0; fun < MAX_FUN; ++fun)
             {
                 //addr=0;
-                addr=BASE_ADDR|(bus<<20)|(dev<<15)|(fun<<12);//要寻找的偏移地址，根据PCIe的物理内存偏移
-                ptrdata=mmap(NULL,LEN_SIZE,PROT_READ|PROT_WRITE,MAP_SHARED,fd,addr);//映射后返回的首地址
+                addr = BASE_ADDR | (bus << 20) | (dev << 15) | (fun << 12);//要寻找的偏移地址，根据PCIe的物理内存偏移
+                ptrdata = mmap(NULL, LEN_SIZE, PROT_READ | PROT_WRITE,
+                            MAP_SHARED, fd, addr);//映射后返回的首地址
                 //void*mmap(void* start,size_t length,int prot,int flags,int fd,off_t offset);
                 //start映射區開始地址，設置為NULL時表示由系統決定
                 //length映射區長度單位，地址自然是sizeof(unsigned long)
