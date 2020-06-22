@@ -10,6 +10,7 @@
 #define MAX_DEV 32
 #define MAX_FUN 8
 #define BASE_ADDR 0xf8000000  //我的电脑的基地址，你的可能不一样哦
+//#define BASE_ADDR 0xc0000000  //我的电脑的基地址，你的可能不一样哦
 #define LEN_SIZE sizeof(unsigned long)
 
 typedef unsigned int WORD;
@@ -21,23 +22,23 @@ void typeshow(BYTE data) //
     printf("pcie type:%02x  - ",data);
     switch(data)
     {
-        case 0x00:printf("PCIExpress Endpoint device\n");
+        case 0x00:printf("PCI Express Endpoint device\n");
                   break;
-        case 0x01:printf("LegacyPCI Express Endpoint device\n");
+        case 0x01:printf("Legacy PCI Express Endpoint device\n");
                   break;
         case 0x04:printf("RootPort of PCI Express Root Complex\n");
                   break;
         case 0x05:printf("Upstream Port of PCI Express Switch\n");
                   break;
-        case 0x06:printf("DownstreamPort of PCI Express Switch\n");
+        case 0x06:printf("Downstream Port of PCI Express Switch\n");
                   break;
-        case 0x07:printf("PCiExpress-to-PCI/PCI-x Bridge\n");
+        case 0x07:printf("PCi Express-to-PCI/PCI-x Bridge\n");
                   break;
         case 0x08:printf("PCI/PCI-xto PCi Express Bridge\n");
                   break;
-        case 0x09:printf("RootComplex Integrated Endpoint Device\n");
+        case 0x09:printf("Root Complex Integrated Endpoint Device\n");
                   break;
-        case 0x0a:printf("RootComplex Event Collector\n");
+        case 0x0a:printf("Root Complex Event Collector\n");
                   break;
 
         default:printf("reserved\n");
@@ -117,14 +118,13 @@ void linkwidthshow(BYTE width)
 
 int main()
 {
-    WORD addr=0;
+    WORD addr = 0, ptr_content = 0xffffffff;
     WORD bus,dev,fun;
-    WORD *ptrdata;
-    WORD*ptrsearch;
+    WORD *ptrdata = &ptr_content;
+    WORD *ptrsearch;
     BYTE nextpoint;//8bit
 
-    int fd;
-    int i;
+    int fd, i, is_pcie = 0, loop_num = 0;
 
     fd = open("/dev/mem",O_RDWR);
     //“/dev/mem”物理內存全映像，可以用來訪問物理內存，一般是open("/dev/mem",O_RD_WR),然後mmap，接著就可以用mmap地址訪問物理內存
@@ -136,11 +136,11 @@ int main()
     }
     printf("fd=%d open /dev/mem successfully.\n",fd);
 
-    for(bus = 0; bus < MAX_BUS; ++bus)
+    for (bus = 0; bus < MAX_BUS; ++bus)
     {
-        for(dev = 0; dev < MAX_DEV; ++dev)
+        for (dev = 0; dev < MAX_DEV; ++dev)
         {
-            for(fun = 0; fun < MAX_FUN; ++fun)
+            for (fun = 0; fun < MAX_FUN; ++fun)
             {
                 //addr=0;
                 addr = BASE_ADDR | (bus << 20) | (dev << 15) | (fun << 12);//要寻找的偏移地址，根据PCIe的物理内存偏移
@@ -154,45 +154,51 @@ int main()
                 //fd文件描述符
                 //offset被映射對象內容的起點
 
-                if(ptrdata==(void *)-1)
+                if (ptrdata == (void *)-1)
                 {
-                   munmap(ptrdata,LEN_SIZE);
+                   munmap(ptrdata, LEN_SIZE);
                    break;
                 }
-                if(*ptrdata != 0xffffffff)
+                if (*ptrdata != 0xffffffff)
                 {
-                   nextpoint=(BYTE)(*(ptrdata+0x34/4));//capability pointer
-                   ptrsearch=ptrdata + nextpoint/4;//the base address of capability structure
+                    nextpoint = (BYTE)(*(ptrdata + 0x34/4));//capability pointer
+                    ptrsearch = ptrdata + nextpoint/4;//the base address of capability structure
 
-                   printf("PCI %02x:%02x.%x -> next point:%x    ",
-                    bus, dev, fun, nextpoint);
-                   printf("ptrdata:0x%x, search:%x\n",*ptrdata, *ptrsearch);
-
-                   while(1)//search for the pcie device
-                   {
-                       if((BYTE)(*ptrsearch)==0x10)//capability id of 10h indicating pcie capabilitystructure
-                       {
-                            printf("\n/***************************\n");
-                            printf("PCIE -> %02x:%02x.%x\n",bus, dev, fun);
-                            printf("vender id:%x\t",(*ptrdata)&0x0000ffff);
-                            printf("device id:%x\n",((*ptrdata)>>8)&0x0000ffff);
-
-                            printf("ptrsearch:%x\n",*ptrsearch);
-                            typeshow((BYTE)(((*ptrsearch)>>20)&0x0f));
-
-                            speedshow((BYTE)(((*(ptrsearch+0x2c/4))>>1)&0x7f));
-
-                            linkspeedshow((BYTE)(*(ptrsearch+0x0c/4)&0x0f));
-
-                            linkwidthshow((BYTE)(((*(ptrsearch+0x0c/4))>>4)&0x3f));
-                            printf("***************************/\n");
+                    is_pcie = 0;
+                    loop_num = 0;
+                    while(1)//search for the pcie device
+                    {
+                        loop_num++;
+                        if((BYTE)(*ptrsearch) == 0x10)//capability id of 10h indicating pcie capabilitystructure
+                        {
+                            is_pcie = 1;
+                            printf("PCIE %02x:%02x.%x -> ",bus, dev, fun);
+                            printf("vender:0x%04x\t", (*ptrdata)&0x0000ffff);
+                            printf("device:0x%04x\t",
+                                ((*ptrdata)>>16)&0x0000ffff);
+                            printf("next point:0x%x\t ptrsearch:%08x\n",
+                                nextpoint/4, *ptrsearch);
+                            //typeshow((BYTE)(((*ptrsearch)>>20)&0x0f));
+                            //speedshow((BYTE)(((*(ptrsearch+0x2c/4))>>1)&0x7f));
+                            //linkspeedshow((BYTE)(*(ptrsearch+0x0c/4)&0x0f));
+                            //linkwidthshow((BYTE)(((*(ptrsearch+0x0c/4))>>4)&0x3f));
                             break;//havefound the pcie device and printed all the message,break the while
-                       }
-                       if((BYTE)((*ptrsearch)>>8)==0x00)//no pcie device exsist
+                        }
+                        if((BYTE)((*ptrsearch)>>8)==0x00)//no pcie device exist
                             break;
-                       ptrsearch=ptrdata+((BYTE)(((*ptrsearch)>>8)&0x00ff))/4;//next cap pointer
-                       printf("next pointer:%x\n",*ptrsearch);
-                   }
+                        if ( loop_num >= 16)
+                            break;
+                        ptrsearch=ptrdata + ((BYTE)(((*ptrsearch) >> 8)
+                                & 0x00ff))/4;//next cap pointer
+                        //printf("next pointer offset:0x%x\n", (BYTE)(((*ptrsearch) >> 8) & 0x00ff));
+                    }
+                    if (is_pcie == 0) {
+                        printf("PCI  %02x:%02x.%x -> vender:0x%04x\tdevice:0x%04x\t",
+                            bus, dev, fun,
+                            (*ptrdata)&0x0000ffff, ((*ptrdata)>>16)&0x0000ffff);
+                        printf("next point:0x%02x\t search:%08x\n",
+                            nextpoint, *ptrsearch);
+                    }
                 }
                 munmap(ptrdata,LEN_SIZE);
             }
