@@ -1,6 +1,7 @@
 #include<stdio.h>
 #include<stdlib.h>
 #include<unistd.h>
+#include <string.h>
 #include<sys/types.h>
 #include<sys/stat.h>
 #include<sys/mman.h> //mmap
@@ -9,17 +10,20 @@
 #define MAX_BUS 31 //一般来说到4就够了
 #define MAX_DEV 32
 #define MAX_FUN 8
-#define BASE_ADDR 0xf8000000  //我的电脑的基地址，你的可能不一样哦
+//#define BASE_ADDR 0xf8000000  //我的电脑的基地址，你的可能不一样哦
 //#define BASE_ADDR 0xc0000000  //我的电脑的基地址，你的可能不一样哦
 #define LEN_SIZE sizeof(unsigned long)
+#define MAPS_LINE_LEN 128
 
 typedef unsigned int WORD;
 typedef unsigned char BYTE;//8bit
 
+static unsigned long BASE_ADDR;
+static int list;
 
 void typeshow(BYTE data) //
 {
-    printf("pcie type:%02x  - ",data);
+    printf("\tpcie type:%02x  - ",data);
     switch(data)
     {
         case 0x00:printf("PCI Express Endpoint device\n");
@@ -48,7 +52,7 @@ void typeshow(BYTE data) //
 
 void speedshow(BYTE speed)
 {
-    printf("speed: %x   - ",speed);
+    printf("\tspeed: %x   - ",speed);
     switch(speed)
     {
         case 0x00:printf("2.5GT/S");
@@ -66,7 +70,7 @@ void speedshow(BYTE speed)
 
 void linkspeedshow(BYTE speed)
 {
-    printf("link speed:%x   - ",speed);
+    printf("\tlink speed:%x   - ",speed);
     switch(speed)
     {
         case 0x01:printf("SupportedLink Speeds Vector filed bit 0");
@@ -92,7 +96,7 @@ void linkspeedshow(BYTE speed)
 
 void linkwidthshow(BYTE width)
 {
-    printf("link width:%02x - ",width);
+    printf("\tlink width:%02x - ",width);
     switch(width)
     {
         case 0x01:printf("x1");
@@ -116,7 +120,7 @@ void linkwidthshow(BYTE width)
     printf("\n");
 }
 
-int main()
+int scan_pci(void)
 {
     WORD addr = 0, ptr_content = 0xffffffff;
     WORD bus,dev,fun;
@@ -176,12 +180,14 @@ int main()
                             printf("vender:0x%04x\t", (*ptrdata)&0x0000ffff);
                             printf("device:0x%04x\t",
                                 ((*ptrdata)>>16)&0x0000ffff);
-                            printf("next point:0x%x\t ptrsearch:%08x\n",
+                            printf("next point:0x%x\t search:%08x\n",
                                 nextpoint/4, *ptrsearch);
-                            //typeshow((BYTE)(((*ptrsearch)>>20)&0x0f));
-                            //speedshow((BYTE)(((*(ptrsearch+0x2c/4))>>1)&0x7f));
-                            //linkspeedshow((BYTE)(*(ptrsearch+0x0c/4)&0x0f));
-                            //linkwidthshow((BYTE)(((*(ptrsearch+0x0c/4))>>4)&0x3f));
+                            if (list != 0 ) {
+                                typeshow((BYTE)(((*ptrsearch)>>20)&0x0f));
+                                speedshow((BYTE)(((*(ptrsearch+0x2c/4))>>1)&0x7f));
+                                linkspeedshow((BYTE)(*(ptrsearch+0x0c/4)&0x0f));
+                                linkwidthshow((BYTE)(((*(ptrsearch+0x0c/4))>>4)&0x3f));
+                            }
                             break;//havefound the pcie device and printed all the message,break the while
                         }
                         if((BYTE)((*ptrsearch)>>8)==0x00)//no pcie device exist
@@ -205,5 +211,75 @@ int main()
         }
     }
     close(fd);
+    return 0;
+}
+
+int find_bar(void)
+{
+#ifdef __x86_64__
+    FILE *maps;
+    BASE_ADDR = 0xf8000000; // set it as a default BAR
+    int find = 0;
+    unsigned long *start = malloc(sizeof(unsigned long) * 5);
+    char line[MAPS_LINE_LEN], name1[MAPS_LINE_LEN];
+    char *mmio_bar = "MMCONFIG";
+
+    printf("Try to open /proc/iomem\n");
+    maps = fopen("/proc/iomem", "r");
+	if (!maps) {
+		printf("[WARN]\tCould not open /proc/iomem\n");
+		exit (1);
+	}
+
+	while (fgets(line, MAPS_LINE_LEN, maps)) {
+        if (!strstr(line, mmio_bar))
+            continue;
+
+		if (sscanf(line, "%p-%s",
+                &start, name1) != 2) {
+            continue;
+            }
+        printf("start:%p, name1:%s\n", start, name1);
+
+        printf("Find base address for mmio(MMCONFIG):%p\n", start);
+        BASE_ADDR = (unsigned long)start;
+        find = 1;
+        break;
+    }
+
+    fclose(maps);
+
+    if (find != 1) {
+        printf("Could not find correct mmio base address:%d, exit.\n", find);
+        exit (2);
+    }
+
+    return 0;
+#else
+	return 0;
+#endif
+}
+
+int main(int argc, char *argv[])
+{
+    char parm;
+
+    if (argc >= 2) {
+        sscanf(argv[1], "%c", &parm);
+		printf("1 parameters: parm=%c\n", parm);
+    }
+
+    switch (parm) {
+        case 'a' :
+            find_bar();
+            scan_pci();
+            printf("Show detailed info.\n");
+            break;
+        default :
+            break;
+    }
+
+    find_bar();
+    //scan_pci();
     return 0;
 }
