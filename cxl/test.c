@@ -7,7 +7,7 @@
 #include<sys/mman.h>
 #include<fcntl.h>
 
-#define MAX_BUS 100
+#define MAX_BUS 255
 #define MAX_DEV 32
 #define MAX_FUN 8
 #define LEN_SIZE sizeof(unsigned long)
@@ -201,7 +201,7 @@ int scan_pci(void)
 	WORD *ptrsearch;
 	BYTE nextpoint;
 
-	int fd, i, is_pcie = 0, loop_num = 0;
+	int fd, is_pcie = 0, loop_num = 0;
 
 	fd = open("/dev/mem",O_RDWR);
 
@@ -338,26 +338,34 @@ int find_bar(void)
 int main(int argc, char *argv[])
 {
 	char parm;
+	int bus, dev, func;
 
-	if (argc >= 2) {
+	if (argc == 2) {
 		sscanf(argv[1], "%c", &parm);
 		printf("1 parameters: parm=%c\n", parm);
-	}
+		find_bar();
 
-	find_bar();
+		switch (parm) {
+			case 'a' :
+				scan_pci();
+				printf("Done.\n");
+				break;
+			case 's' :
+				check_list = 1;
+				scan_pci();
+				break;
+			default :
+				break;
+		}
+	} else if (argc == 4) {
+		sscanf(argv[1], "%x", &bus);
+		sscanf(argv[2], "%x", &dev);
+		sscanf(argv[3], "%x", &func);
+		printf("bus:dev:func ->%02x:%02x.%x\n",bus, dev, func);
+		find_bar();
 
-	switch (parm) {
-		case 'a' :
-			scan_pci();
-			printf("Show detailed info.\n");
-			break;
-		case 's' :
-			check_list = 1;
-			scan_pci();
-			break;
-		default :
-			break;
-	}
+	} else
+		find_bar();
 
 	return 0;
 }
