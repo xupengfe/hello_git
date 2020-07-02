@@ -313,16 +313,9 @@ int scan_pci(void)
 	for (bus = 0; bus < MAX_BUS; ++bus) {
 		for (dev = 0; dev < MAX_DEV; ++dev) {
 			for (fun = 0; fun < MAX_FUN; ++fun) {
-				addr = BASE_ADDR | (bus << 20) | (dev << 15) | (fun << 12);//要寻找的偏移地址，根据PCIe的物理内存偏移
+				addr = BASE_ADDR | (bus << 20) | (dev << 15) | (fun << 12);
 				ptrdata = mmap(NULL, LEN_SIZE, PROT_READ | PROT_WRITE,
-							MAP_SHARED, fd, addr);//映射后返回的首地址
-				//void*mmap(void* start,size_t length,int prot,int flags,int fd,off_t offset);
-				//start映射區開始地址，設置為NULL時表示由系統決定
-				//length映射區長度單位，地址自然是sizeof(unsigned long)
-				//prot設置為PORT_READ|PORT_WRITE表示頁可以被讀寫
-				//flag指定映射對象類型，MAP_SHARED表示與其他所有映射這個對象的所有進程共享映射空間
-				//fd文件描述符
-				//offset被映射對象內容的起點
+							MAP_SHARED, fd, addr);
 
 				if (ptrdata == (void *)-1) {
 				   munmap(ptrdata, LEN_SIZE);
