@@ -185,10 +185,17 @@ int check_pci(WORD *ptrdata, WORD bus, WORD dev, WORD fun)
 
 	nextpoint = (BYTE)(*(ptrdata + nextpoint/4));
 	ptrsearch = ptrdata + nextpoint/4;
-	printf("PCI  %02x:%02x.%x-> ",bus, dev, fun);
+	if (is_pcie == 0)
+		printf("PCI  %02x:%02x.%x-> ",bus, dev, fun);
+	else
+		printf("PCIE %02x:%02x.%x-> ",bus, dev, fun);
 	printf("vender:0x%04x ", (*ptrdata) & 0x0000ffff);
 	printf("dev:0x%04x offset:0x34->%02x cap:%02x|", 
 		((*ptrdata) >> 16) & 0x0000ffff, nextpoint, (BYTE)(*ptrsearch));
+	if (((BYTE)(*ptrsearch) == 0) | (nextpoint == 0)) {
+		printf("\n");
+		return 0;
+	}
 
 	while(1) {
 		if((BYTE)((*ptrsearch) >> 8) == 0x00) {
@@ -205,40 +212,6 @@ int check_pci(WORD *ptrdata, WORD bus, WORD dev, WORD fun)
 		printf("cap:%02x|", (BYTE)(*ptrsearch));
 		num++;
 	}
-	return 0;
-}
-
-int check_pcie(WORD *ptrdata, WORD bus, WORD dev, WORD fun)
-{
-	BYTE nextpoint = 0x34;
-	WORD *ptrsearch;
-	int num = 0;
-
-	check_pci(ptrdata, bus, dev, fun);
-/*
-	nextpoint = (BYTE)(*(ptrdata + nextpoint/4));
-	ptrsearch = ptrdata + nextpoint/4;
-	printf("PCIE %02x:%02x.%x-> ",bus, dev, fun);
-	printf("vender:0x%04x ", (*ptrdata) & 0x0000ffff);
-	printf("dev:0x%04x offset:0x34->%02x cap:%02x|", 
-		((*ptrdata) >> 16) & 0x0000ffff, nextpoint, (BYTE)(*ptrsearch));
-
-	while(1) {
-		if((BYTE)((*ptrsearch) >> 8) == 0x00) {
-			printf("\n");
-			break;
-		}
-		if (num >= 16) {
-			printf("\n");
-			break;
-		}
-
-		printf("offset:%02x ", (BYTE)(((*ptrsearch) >> 8) & 0x00ff));
-		ptrsearch = ptrdata + ((BYTE)(((*ptrsearch) >> 8) & 0x00ff))/4;
-		printf("cap:%02x|", (BYTE)(*ptrsearch));
-		num++;
-	}
-*/
 	return 0;
 }
 
@@ -338,6 +311,11 @@ int scan_pci(void)
 							is_pcie = 1;
 							break; /* find the pcie and break */
 						}
+						if ((BYTE)(*ptrsearch) == 0xff) {
+							printf("Check %02x:%02x.%x cap is 0xff, return\n",
+									bus, dev, fun);
+							return 0;
+						}
 						/* no PCIE find */
 						if((BYTE)((*ptrsearch) >> 8) == 0x00)
 							break;
@@ -349,23 +327,13 @@ int scan_pci(void)
 						loop_num++;
 					}
 
-					if (is_pcie == 1) {
-						check_pcie(ptrdata, bus, dev, fun);
-						if ((check_list & 0x1) == 1) {
-							typeshow((BYTE)(((*ptrsearch)>>20)&0x0f));
-							speedshow((BYTE)(((*(ptrsearch+0x2c/4))>>1)&0x7f));
-							linkspeed((BYTE)(*(ptrsearch+0x0c/4)&0x0f));
-							linkwidth((BYTE)(((*(ptrsearch+0x0c/4))>>4)&0x3f));
-						}
-					}
-					if (is_pcie == 0) {
-						check_pci(ptrdata, bus, dev, fun);
-						if (check_list != 0) {
-							typeshow((BYTE)(((*ptrsearch)>>20)&0x0f));
-							speedshow((BYTE)(((*(ptrsearch+0x2c/4))>>1)&0x7f));
-							linkspeed((BYTE)(*(ptrsearch+0x0c/4)&0x0f));
-							linkwidth((BYTE)(((*(ptrsearch+0x0c/4))>>4)&0x3f));
-						}
+					check_pci(ptrdata, bus, dev, fun);
+
+					if ((check_list & 0x1) == 1) {
+						typeshow((BYTE)(((*ptrsearch)>>20)&0x0f));
+						speedshow((BYTE)(((*(ptrsearch+0x2c/4))>>1)&0x7f));
+						linkspeed((BYTE)(*(ptrsearch+0x0c/4)&0x0f));
+						linkwidth((BYTE)(((*(ptrsearch+0x0c/4))>>4)&0x3f));
 					}
 					if (((check_list >> 1) & 0x1) == 1)
 						pci_show(bus, dev, fun);
