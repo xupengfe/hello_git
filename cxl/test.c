@@ -180,15 +180,16 @@ void linkwidth(BYTE width)
 int check_pci(WORD *ptrdata, WORD bus, WORD dev, WORD fun)
 {
 	BYTE nextpoint = 0x34;
+	unsigned int next = 0x100;
 	WORD *ptrsearch;
 	int num = 0;
 
 	nextpoint = (BYTE)(*(ptrdata + nextpoint/4));
 	ptrsearch = ptrdata + nextpoint/4;
 	if (is_pcie == 0)
-		printf("PCI  %02x:%02x.%x-> ",bus, dev, fun);
+		printf("PCI  %02x:%02x.%x-> ", bus, dev, fun);
 	else
-		printf("PCIE %02x:%02x.%x-> ",bus, dev, fun);
+		printf("PCIE %02x:%02x.%x-> ", bus, dev, fun);
 	printf("vender:0x%04x ", (*ptrdata) & 0x0000ffff);
 	printf("dev:0x%04x offset:0x34->%02x cap:%02x|", 
 		((*ptrdata) >> 16) & 0x0000ffff, nextpoint, (BYTE)(*ptrsearch));
@@ -212,12 +213,19 @@ int check_pci(WORD *ptrdata, WORD bus, WORD dev, WORD fun)
 		printf("cap:%02x|", (BYTE)(*ptrsearch));
 		num++;
 	}
+/*
+	if (is_pcie == 1) {
+		printf(" pcie cap %08x\n", *(ptrdata + next/4));
+		printf("pcie_cap low:%04x, high: %04x\n", (BYTE)(*(ptrdata + next/4)),
+			((*(ptrdata + next/4) >> 16) & 0xffff));
+	}
+*/
 	return 0;
 }
 
 int pci_show(WORD bus, WORD dev, WORD fun)
 {
-	WORD *ptrdata = malloc(sizeof(unsigned long) * 1024);
+	WORD *ptrdata = malloc(sizeof(unsigned long) * 4096);
 	WORD addr = 0;
 	int fd, offset;
 
@@ -257,7 +265,7 @@ int pci_show(WORD bus, WORD dev, WORD fun)
 				printf("\n");
 		}
 	}
-
+	check_pci(ptrdata, bus, dev, fun);
 	munmap(ptrdata, LEN_SIZE);
 	close(fd);
 	return 0;
@@ -267,7 +275,7 @@ int scan_pci(void)
 {
 	WORD addr = 0, ptr_content = 0xffffffff;
 	WORD bus, dev, fun;
-	WORD *ptrdata = malloc(sizeof(unsigned long) * 1024);
+	WORD *ptrdata = malloc(sizeof(unsigned long) * 4096);
 	WORD *ptrsearch;
 	BYTE nextpoint;
 
