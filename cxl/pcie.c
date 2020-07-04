@@ -17,6 +17,7 @@
 
 typedef unsigned int WORD;
 typedef unsigned char BYTE;
+typedef unsigned short int DBYTE;
 
 static unsigned long BASE_ADDR;
 static int check_list, is_pcie;
@@ -177,47 +178,86 @@ void linkwidth(BYTE width)
 	printf("\n");
 }
 
+int check_pcie(WORD *ptrdata, WORD bus, WORD dev, WORD fun)
+{
+	BYTE ver = 0;
+	WORD next = 0x100, num = 0;
+	DBYTE offset = 0, cap = 0;
+
+	if (is_pcie == 1) {
+		cap = (DBYTE)(*(ptrdata + next/4));
+		offset = (DBYTE)(*(ptrdata + next/4) >> 20);
+		ver = (BYTE)((*(ptrdata + next/4) >> 16) & 0xf);
+		if (offset == 0) {
+			printf("PCIE cap:%04x ver:%01x off:%03x\n", cap, ver, offset);
+			return 0;
+		} else
+		printf("PCIE cap:%04x ver:%01x off:%03x|", cap, ver, offset);
+
+		while(1) {
+			num++;
+			cap = (DBYTE)(*(ptrdata + offset/4));
+			offset = (DBYTE)(*(ptrdata + offset/4) >> 20);
+			ver = (BYTE)((*(ptrdata + offset/4) >> 16) & 0xf);
+
+			if (offset == 0) {
+				printf("cap:%04x ver:%01x off:%03x\n", cap, ver, offset);
+				break;
+			} else
+				printf("cap:%04x ver:%01x off:%03x|", cap, ver, offset);
+			if (num > 21) {
+				printf("PCIE num is more than 20, return\n");
+				break;
+			}
+		}
+	} else {
+		printf("\n");
+	}
+	return 0;
+}
+
 int check_pci(WORD *ptrdata, WORD bus, WORD dev, WORD fun)
 {
 	BYTE nextpoint = 0x34;
+	WORD num = 0;
 	WORD *ptrsearch;
-	int num = 0;
 
 	nextpoint = (BYTE)(*(ptrdata + nextpoint/4));
 	ptrsearch = ptrdata + nextpoint/4;
-	if (is_pcie == 0)
-		printf("PCI  %02x:%02x.%x-> ",bus, dev, fun);
-	else
-		printf("PCIE %02x:%02x.%x-> ",bus, dev, fun);
-	printf("vender:0x%04x ", (*ptrdata) & 0x0000ffff);
-	printf("dev:0x%04x offset:0x34->%02x cap:%02x|", 
-		((*ptrdata) >> 16) & 0x0000ffff, nextpoint, (BYTE)(*ptrsearch));
-	if (((BYTE)(*ptrsearch) == 0) | (nextpoint == 0)) {
-		printf("\n");
+
+	if (nextpoint == 0) {
+		printf("off:0x34->%02x|\n",nextpoint);
 		return 0;
 	}
+	printf("off:0x34->%02x cap:%02x|",
+			nextpoint, (BYTE)(*ptrsearch));
 
 	while(1) {
 		if((BYTE)((*ptrsearch) >> 8) == 0x00) {
-			printf("\n");
+			printf("off:%02x|", (BYTE)((*ptrsearch) >> 8));
 			break;
 		}
-		if (num >= 16) {
-			printf("\n");
+		if (num >= 16)
 			break;
-		}
 
-		printf("offset:%02x ", (BYTE)(((*ptrsearch) >> 8) & 0x00ff));
+		printf("off:%02x ", (BYTE)(((*ptrsearch) >> 8) & 0x00ff));
 		ptrsearch = ptrdata + ((BYTE)(((*ptrsearch) >> 8) & 0x00ff))/4;
 		printf("cap:%02x|", (BYTE)(*ptrsearch));
 		num++;
 	}
+
+	if (((check_list >> 3) & 0x1) == 1) {
+		printf("\n");
+		return 0;
+	}
+	check_pcie(ptrdata, bus, dev, fun);
+
 	return 0;
 }
 
 int pci_show(WORD bus, WORD dev, WORD fun)
 {
-	WORD *ptrdata = malloc(sizeof(unsigned long) * 1024);
+	WORD *ptrdata = malloc(sizeof(unsigned long) * 4096);
 	WORD addr = 0;
 	int fd, offset;
 
@@ -238,10 +278,10 @@ int pci_show(WORD bus, WORD dev, WORD fun)
 	for(offset = 0; offset < 64; offset++) {
 		if(offset % 4 == 0)
 			printf("%02x: ", offset * 4);
-		printf("%02x ",(unsigned char)(*(ptrdata + offset) >> 0));
-		printf("%02x ",(unsigned char)(*(ptrdata + offset) >> 8));
-		printf("%02x ",(unsigned char)(*(ptrdata + offset) >> 16));
-		printf("%02x ",(unsigned char)(*(ptrdata + offset) >> 24));
+		printf("%02x ",(BYTE)(*(ptrdata + offset) >> 0));
+		printf("%02x ",(BYTE)(*(ptrdata + offset) >> 8));
+		printf("%02x ",(BYTE)(*(ptrdata + offset) >> 16));
+		printf("%02x ",(BYTE)(*(ptrdata + offset) >> 24));
 		if(offset % 4 == 3)
 			printf("\n");
 	}
@@ -249,15 +289,15 @@ int pci_show(WORD bus, WORD dev, WORD fun)
 		for(offset = 64; offset < 1024; offset++) {
 			if(offset % 4 == 0)
 				printf("%02x: ", offset * 4);
-			printf("%02x ",(unsigned char)(*(ptrdata + offset) >> 0));
-			printf("%02x ",(unsigned char)(*(ptrdata + offset) >> 8));
-			printf("%02x ",(unsigned char)(*(ptrdata + offset) >> 16));
-			printf("%02x ",(unsigned char)(*(ptrdata + offset) >> 24));
+			printf("%02x ",(BYTE)(*(ptrdata + offset) >> 0));
+			printf("%02x ",(BYTE)(*(ptrdata + offset) >> 8));
+			printf("%02x ",(BYTE)(*(ptrdata + offset) >> 16));
+			printf("%02x ",(BYTE)(*(ptrdata + offset) >> 24));
 			if(offset % 4 == 3)
 				printf("\n");
 		}
 	}
-
+	check_pci(ptrdata, bus, dev, fun);
 	munmap(ptrdata, LEN_SIZE);
 	close(fd);
 	return 0;
@@ -267,7 +307,7 @@ int scan_pci(void)
 {
 	WORD addr = 0, ptr_content = 0xffffffff;
 	WORD bus, dev, fun;
-	WORD *ptrdata = malloc(sizeof(unsigned long) * 1024);
+	WORD *ptrdata = malloc(sizeof(unsigned long) * 4096);
 	WORD *ptrsearch;
 	BYTE nextpoint;
 
@@ -312,8 +352,8 @@ int scan_pci(void)
 							break; /* find the pcie and break */
 						}
 						if ((BYTE)(*ptrsearch) == 0xff) {
-							printf("Check %02x:%02x.%x cap is 0xff, return\n",
-									bus, dev, fun);
+							printf("Check %02x:%02x.%x cap is %02x, return\n",
+									bus, dev, fun, (BYTE)(*ptrsearch));
 							return 0;
 						}
 						/* no PCIE find */
@@ -327,7 +367,16 @@ int scan_pci(void)
 						loop_num++;
 					}
 
-					check_pci(ptrdata, bus, dev, fun);
+					if (is_pcie == 0)
+						printf("PCI  %02x:%02x.%x: ", bus, dev, fun);
+					else
+						printf("PCIE %02x:%02x.%x: ", bus, dev, fun);
+					printf("vender:0x%04x dev:0x%04x ", (*ptrdata) & 0x0000ffff,
+							((*ptrdata) >> 16) & 0x0000ffff);
+					if (((check_list >> 2) & 0x1) == 1)
+						check_pcie(ptrdata, bus, dev, fun);
+					else
+						check_pci(ptrdata, bus, dev, fun);
 
 					if ((check_list & 0x1) == 1) {
 						typeshow((BYTE)(((*ptrsearch)>>20)&0x0f));
@@ -349,7 +398,7 @@ int scan_pci(void)
 int main(int argc, char *argv[])
 {
 	char parm;
-	int bus, dev, func;
+	WORD bus, dev, func;
 
 	if (argc == 2) {
 		sscanf(argv[1], "%c", &parm);
@@ -358,13 +407,19 @@ int main(int argc, char *argv[])
 
 		switch (parm) {
 		case 'a':
-			check_list = (check_list | 0x3);
+			check_list = (check_list | 0x7);
 			break;
-		case 's':
+		case 's': // speed
 			check_list = (check_list | 0x1);
 			break;
-		case 'x':
+		case 'x': // pci binary
 			check_list = (check_list | 0x2);
+			break;
+		case 'i': // only check pci capability
+			check_list = (check_list | 0x8);
+			break;
+		case 'e': // only pcie capability
+			check_list = (check_list | 0x4);
 			break;
 		case 'n':
 			check_list = 0;
@@ -377,14 +432,14 @@ int main(int argc, char *argv[])
 		sscanf(argv[1], "%x", &bus);
 		sscanf(argv[2], "%x", &dev);
 		sscanf(argv[3], "%x", &func);
-		printf("bus:dev.func -> %02x:%02x.%x\n",bus, dev, func);
+		printf("bus:dev.func: %02x:%02x.%x\n",bus, dev, func);
 		pci_show(bus, dev, func);
 	} else if (argc == 5) {
 		sscanf(argv[1], "%c", &parm);
 		sscanf(argv[2], "%x", &bus);
 		sscanf(argv[3], "%x", &dev);
 		sscanf(argv[4], "%x", &func);
-		printf("bus:dev.func -> %02x:%02x.%x\n",bus, dev, func);
+		printf("bus:dev.func: %02x:%02x.%x\n",bus, dev, func);
 		switch (parm) {
 		case 'i':
 			is_pcie = 0;
