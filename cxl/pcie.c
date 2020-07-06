@@ -22,6 +22,19 @@ typedef unsigned short int DBYTE;
 static unsigned long BASE_ADDR;
 static int check_list, is_pcie;
 
+int usage(void) {
+	printf("Usage: [n|a|s|i|e bus dev func] \n");
+	printf("n    Show all PCI and PCIE important capability info\n");
+	printf("a    Show all PCI and PCIE info\n");
+	printf("s    Show all PCi and PCIE speed and bandwidth\n");
+	printf("i    Show all or specific PCI info\n");
+	printf("e    Show all or specific PCIE info\n");
+	printf("bus  Specific bus number(HEX)\n");
+	printf("dev  Specific device number(HEX)\n");
+	printf("func Specific function number(HEX)\n");
+	exit(2);
+}
+
 int find_bar(void)
 {
 #ifdef __x86_64__
@@ -51,7 +64,7 @@ int find_bar(void)
 			printf("BAR(start) is NULL, did you use root to execute?\n");
 			exit (1);
 		}
-		printf("Find base address for mmio(MMCONFIG):%p\n", start);
+		printf("BAR(Base Address Register) for mmio MMCONFIG:%p\n", start);
 		BASE_ADDR = (unsigned long)start;
 		find = 1;
 		break;
@@ -188,8 +201,8 @@ int check_pcie(WORD *ptrdata, WORD bus, WORD dev, WORD fun)
 		cap = (DBYTE)(*(ptrdata + next/4));
 		offset = (DBYTE)(*(ptrdata + next/4) >> 20);
 		ver = (BYTE)((*(ptrdata + next/4) >> 16) & 0xf);
-		if (offset == 0) {
-			printf("PCIE cap:%04x ver:%01x off:%03x\n", cap, ver, offset);
+		if ((offset == 0) | (offset == 0xfff)) {
+			printf("PCIE cap:%04x ver:%01x off:%03x|\n", cap, ver, offset);
 			return 0;
 		} else
 		printf("PCIE cap:%04x ver:%01x off:%03x|", cap, ver, offset);
@@ -225,7 +238,7 @@ int check_pci(WORD *ptrdata, WORD bus, WORD dev, WORD fun)
 	nextpoint = (BYTE)(*(ptrdata + nextpoint/4));
 	ptrsearch = ptrdata + nextpoint/4;
 
-	if (nextpoint == 0) {
+	if ((nextpoint == 0) | (nextpoint == 0xff)) {
 		printf("off:0x34->%02x|\n",nextpoint);
 		return 0;
 	}
@@ -274,30 +287,36 @@ int pci_show(WORD bus, WORD dev, WORD fun)
 	addr = BASE_ADDR | (bus << 20) | (dev << 15) | (fun << 12);
 	ptrdata = mmap(NULL, LEN_SIZE, PROT_READ | PROT_WRITE,
 				MAP_SHARED, fd, addr);
-	printf("%02x:%02x.%01x:\n", bus, dev, fun);
-	for(offset = 0; offset < 64; offset++) {
-		if(offset % 4 == 0)
-			printf("%02x: ", offset * 4);
-		printf("%02x ",(BYTE)(*(ptrdata + offset) >> 0));
-		printf("%02x ",(BYTE)(*(ptrdata + offset) >> 8));
-		printf("%02x ",(BYTE)(*(ptrdata + offset) >> 16));
-		printf("%02x ",(BYTE)(*(ptrdata + offset) >> 24));
-		if(offset % 4 == 3)
+
+	if ((*ptrdata != 0xffffffff) && (*ptrdata != 0)) {
+		printf("%02x:%02x.%01x:", bus, dev, fun);
+
+		if (((check_list >> 1) & 0x1) == 1) {
+			for(offset = 0; offset < 64; offset++) {
+				if(offset % 4 == 0)
+					printf("\n%02x: ", offset * 4);
+				printf("%02x ",(BYTE)(*(ptrdata + offset) >> 0));
+				printf("%02x ",(BYTE)(*(ptrdata + offset) >> 8));
+				printf("%02x ",(BYTE)(*(ptrdata + offset) >> 16));
+				printf("%02x ",(BYTE)(*(ptrdata + offset) >> 24));
+			}
+			if (is_pcie == 1) {
+				for(offset = 64; offset < 1024; offset++) {
+					if(offset % 4 == 0)
+						printf("\n%02x: ", offset * 4);
+					printf("%02x ",(BYTE)(*(ptrdata + offset) >> 0));
+					printf("%02x ",(BYTE)(*(ptrdata + offset) >> 8));
+					printf("%02x ",(BYTE)(*(ptrdata + offset) >> 16));
+					printf("%02x ",(BYTE)(*(ptrdata + offset) >> 24));
+				}
+			}
 			printf("\n");
-	}
-	if (is_pcie == 1) {
-		for(offset = 64; offset < 1024; offset++) {
-			if(offset % 4 == 0)
-				printf("%02x: ", offset * 4);
-			printf("%02x ",(BYTE)(*(ptrdata + offset) >> 0));
-			printf("%02x ",(BYTE)(*(ptrdata + offset) >> 8));
-			printf("%02x ",(BYTE)(*(ptrdata + offset) >> 16));
-			printf("%02x ",(BYTE)(*(ptrdata + offset) >> 24));
-			if(offset % 4 == 3)
-				printf("\n");
 		}
+		if (is_pcie == 1)
+			check_pcie(ptrdata, bus, dev, fun);
+		else
+			check_pci(ptrdata, bus, dev, fun);
 	}
-	check_pci(ptrdata, bus, dev, fun);
 	munmap(ptrdata, LEN_SIZE);
 	close(fd);
 	return 0;
@@ -315,7 +334,7 @@ int scan_pci(void)
 
 	fd = open("/dev/mem",O_RDWR);
 
-	if(fd < 0)
+	if (fd < 0)
 	{
 		printf("open /dev/mem failed!\n");
 		return -1;
@@ -331,12 +350,11 @@ int scan_pci(void)
 							MAP_SHARED, fd, addr);
 
 				if (ptrdata == (void *)-1) {
-				   munmap(ptrdata, LEN_SIZE);
-				   break;
+					munmap(ptrdata, LEN_SIZE);
+					break;
 				}
 
 				if ((*ptrdata != 0xffffffff) && (*ptrdata != 0)) {
-					
 					/* 0x34/4 is capability pointer in PCI */
 					nextpoint = (BYTE)(*(ptrdata + 0x34/4));
 					ptrsearch = ptrdata + nextpoint/4;
@@ -349,7 +367,7 @@ int scan_pci(void)
 						/* 0x10 means PCIE capability */
 						if ((BYTE)(*ptrsearch) == 0x10) {
 							is_pcie = 1;
-							break; /* find the pcie and break */
+							break;
 						}
 						if ((BYTE)(*ptrsearch) == 0xff) {
 							printf("Check %02x:%02x.%x cap is %02x, return\n",
@@ -401,7 +419,10 @@ int main(int argc, char *argv[])
 	WORD bus, dev, func;
 
 	if (argc == 2) {
-		sscanf(argv[1], "%c", &parm);
+		if (sscanf(argv[1], "%c", &parm) != 1) {
+			printf("Invalid parm:%c\n", parm);
+			usage();
+		}
 		printf("1 parameters: parm=%c\n", parm);
 		find_bar();
 
@@ -424,22 +445,20 @@ int main(int argc, char *argv[])
 		case 'n':
 			check_list = 0;
 			break;
+		case 'h':
+			usage();
+			break;
 		default:
+			usage();
 			break;
 		}
 		scan_pci();
-	} else if (argc == 4) {
-		sscanf(argv[1], "%x", &bus);
-		sscanf(argv[2], "%x", &dev);
-		sscanf(argv[3], "%x", &func);
-		printf("bus:dev.func: %02x:%02x.%x\n",bus, dev, func);
-		pci_show(bus, dev, func);
-	} else if (argc == 5) {
-		sscanf(argv[1], "%c", &parm);
-		sscanf(argv[2], "%x", &bus);
-		sscanf(argv[3], "%x", &dev);
-		sscanf(argv[4], "%x", &func);
-		printf("bus:dev.func: %02x:%02x.%x\n",bus, dev, func);
+	}  else if ((argc == 4) | (argc == 5)) {
+		if (sscanf(argv[1], "%c", &parm) != 1) {
+			printf("Invalid parm:%c\n", parm);
+			usage();
+		}
+		find_bar();
 		switch (parm) {
 		case 'i':
 			is_pcie = 0;
@@ -447,12 +466,41 @@ int main(int argc, char *argv[])
 		case 'e':
 			is_pcie = 1;
 			break;
+		case 'a':
+			check_list = (check_list | 0x7);
+			is_pcie = 1;
+			break;
 		default:
+			usage();
 			break;
 		}
+
+		if (sscanf(argv[2], "%x", &bus) != 1) {
+			printf("Invalid bus:%x", bus);
+			usage();
+		}
+		if (sscanf(argv[3], "%x", &dev) != 1) {
+			printf("Invalid dev:%x", dev);
+			usage();
+		}
+		if (argc == 5) {
+			if (sscanf(argv[4], "%x", &func) != 1) {
+				printf("Invalid func:%x", func);
+				usage();
+			}
+		} else {
+			printf("No useful input func, will scan all func\n");
+			for (func = 0; func < MAX_FUN; ++func)
+				pci_show(bus, dev, func);
+			return 0;
+		}
+		printf("parm:%c bus:dev.func: %02x:%02x.%x\n", parm, bus, dev, func);
+
 		pci_show(bus, dev, func);
-	} else
+	} else {
 		find_bar();
+		usage();
+	}
 
 	return 0;
 }
