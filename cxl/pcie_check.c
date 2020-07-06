@@ -200,7 +200,7 @@ void linkwidth(uint8_t width)
 	printf("\n");
 }
 
-int check_pcie(uint32_t *ptrdata, uint32_t bus, uint32_t dev, uint32_t fun)
+int check_pcie(uint32_t *ptrdata)
 {
 	uint8_t ver = 0;
 	uint32_t next = 0x100, num = 0;
@@ -238,7 +238,7 @@ int check_pcie(uint32_t *ptrdata, uint32_t bus, uint32_t dev, uint32_t fun)
 	return 0;
 }
 
-int check_pci(uint32_t *ptrdata, uint32_t bus, uint32_t dev, uint32_t fun)
+int check_pci(uint32_t *ptrdata)
 {
 	uint8_t nextpoint = 0x34;
 	uint32_t num = 0;
@@ -272,7 +272,7 @@ int check_pci(uint32_t *ptrdata, uint32_t bus, uint32_t dev, uint32_t fun)
 		printf("\n");
 		return 0;
 	}
-	check_pcie(ptrdata, bus, dev, fun);
+	check_pcie(ptrdata);
 
 	return 0;
 }
@@ -321,9 +321,9 @@ int pci_show(uint32_t bus, uint32_t dev, uint32_t fun)
 			printf("\n");
 		}
 		if (is_pcie == 1)
-			check_pcie(ptrdata, bus, dev, fun);
+			check_pcie(ptrdata);
 		else
-			check_pci(ptrdata, bus, dev, fun);
+			check_pci(ptrdata);
 	}
 	munmap(ptrdata, LEN_SIZE);
 	close(fd);
@@ -364,7 +364,7 @@ int scan_pci(void)
 	uint32_t *ptrdata = malloc(sizeof(unsigned long) * 4096);
 	uint8_t nextpoint;
 
-	int fd, loop_num = 0;
+	int fd;
 
 	fd = open("/dev/mem", O_RDWR);
 
@@ -406,9 +406,9 @@ int scan_pci(void)
 					printf("vender:0x%04x dev:0x%04x ", (*ptrdata) & 0x0000ffff,
 							((*ptrdata) >> 16) & 0x0000ffff);
 					if (((check_list >> 2) & 0x1) == 1)
-						check_pcie(ptrdata, bus, dev, fun);
+						check_pcie(ptrdata);
 					else
-						check_pci(ptrdata, bus, dev, fun);
+						check_pci(ptrdata);
 
 					if ((check_list & 0x1) == 1) {
 						typeshow((uint8_t)(((*ptrsearch)>>20)&0x0f));
