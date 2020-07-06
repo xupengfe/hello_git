@@ -1,13 +1,14 @@
 // SPDX-License-Identifier: GPL-2.0-or-later
 
-#include<stdio.h>
-#include<stdlib.h>
-#include<unistd.h>
+#include <stdio.h>
+#include <stdlib.h>
+#include <unistd.h>
 #include <string.h>
-#include<sys/types.h>
-#include<sys/stat.h>
-#include<sys/mman.h>
-#include<fcntl.h>
+#include <sys/types.h>
+#include <sys/stat.h>
+#include <sys/mman.h>
+#include <fcntl.h>
+#include <stdint.h>
 
 #define MAX_BUS 256
 #define MAX_DEV 32
@@ -15,19 +16,17 @@
 #define LEN_SIZE sizeof(unsigned long)
 #define MAPS_LINE_LEN 128
 
-typedef unsigned int WORD;
-typedef unsigned char BYTE;
-typedef unsigned short int DBYTE;
-
 static unsigned long BASE_ADDR;
 static int check_list, is_pcie;
 
-int usage(void) {
-	printf("Usage: [n|a|s|i|e bus dev func] \n");
+int usage(void)
+{
+	printf("Usage: [n|a|s|i|e bus dev func]\n");
 	printf("n    Show all PCI and PCIE important capability info\n");
 	printf("a    Show all PCI and PCIE info\n");
 	printf("s    Show all PCi and PCIE speed and bandwidth\n");
 	printf("i    Show all or specific PCI info\n");
+	printf("I    Show all or specific PCI and binary info\n");
 	printf("e    Show all or specific PCIE info\n");
 	printf("bus  Specific bus number(HEX)\n");
 	printf("dev  Specific device number(HEX)\n");
@@ -38,7 +37,7 @@ int usage(void) {
 int find_bar(void)
 {
 #ifdef __x86_64__
-	FILE *maps;
+	FILE * maps;
 	int find = 0;
 	unsigned long *start = malloc(sizeof(unsigned long) * 5);
 	char line[MAPS_LINE_LEN], name1[MAPS_LINE_LEN];
@@ -48,7 +47,7 @@ int find_bar(void)
 	maps = fopen("/proc/iomem", "r");
 	if (!maps) {
 		printf("[WARN]\tCould not open /proc/iomem\n");
-		exit (1);
+		exit(1);
 	}
 
 	while (fgets(line, MAPS_LINE_LEN, maps)) {
@@ -62,7 +61,7 @@ int find_bar(void)
 		printf("start:%p, name1:%s\n", start, name1);
 		if (!start) {
 			printf("BAR(start) is NULL, did you use root to execute?\n");
-			exit (1);
+			exit(1);
 		}
 		printf("BAR(Base Address Register) for mmio MMCONFIG:%p\n", start);
 		BASE_ADDR = (unsigned long)start;
@@ -74,66 +73,76 @@ int find_bar(void)
 
 	if (find != 1) {
 		printf("Could not find correct mmio base address:%d, exit.\n", find);
-		exit (2);
+		exit(2);
 	}
 #endif
 	return 0;
 }
 
-void typeshow(BYTE data)
+void typeshow(uint8_t data)
 {
-	printf("\tpcie type:%02x  - ",data);
-	switch(data) {
-		case 0x00:printf("PCI Express Endpoint device\n");
-			break;
-		case 0x01:printf("Legacy PCI Express Endpoint device\n");
-			break;
-		case 0x04:printf("RootPort of PCI Express Root Complex\n");
-			break;
-		case 0x05:printf("Upstream Port of PCI Express Switch\n");
-			break;
-		case 0x06:printf("Downstream Port of PCI Express Switch\n");
-			break;
-		case 0x07:printf("PCi Express-to-PCI/PCI-x Bridge\n");
-			break;
-		case 0x08:printf("PCI/PCI-xto PCi Express Bridge\n");
-			break;
-		case 0x09:printf("Root Complex Integrated Endpoint Device\n");
-			break;
-		case 0x0a:printf("Root Complex Event Collector\n");
-			break;
-
-		default:printf("reserved\n");
-			break;
+	printf("\tpcie type:%02x  - ", data);
+	switch (data) {
+	case 0x00:
+		printf("PCI Express Endpoint device\n");
+		break;
+	case 0x01:
+		printf("Legacy PCI Express Endpoint device\n");
+		break;
+	case 0x04:
+		printf("RootPort of PCI Express Root Complex\n");
+		break;
+	case 0x05:
+		printf("Upstream Port of PCI Express Switch\n");
+		break;
+	case 0x06:
+		printf("Downstream Port of PCI Express Switch\n");
+		break;
+	case 0x07:
+		printf("PCi Express-to-PCI/PCI-x Bridge\n");
+		break;
+	case 0x08:
+		printf("PCI/PCI-xto PCi Express Bridge\n");
+		break;
+	case 0x09:
+		printf("Root Complex Integrated Endpoint Device\n");
+		break;
+	case 0x0a:
+		printf("Root Complex Event Collector\n");
+		break;
+	default:
+		printf("reserved\n");
+		break;
 	}
 }
 
-void speedshow(BYTE speed)
+void speedshow(uint8_t speed)
 {
-	printf("\tspeed: %x   - ",speed);
-	switch(speed) {
+	printf("\tspeed: %x   - ", speed);
+	switch (speed) {
 	case 0x00:
 		printf("2.5GT/S");
 		break;
 	case 0x02:
 		printf("5GT/S");
 		break;
-	case 0x04: printf("8GT/S");
+	case 0x04:
+		printf("8GT/S");
 		break;
-
-	default: printf("reserved");
+	default:
+		printf("reserved");
 		break;
 	}
 	printf("\n");
 }
 
-void linkspeed(BYTE speed)
+void linkspeed(uint8_t speed)
 {
-	printf("\tlink speed:%x   - ",speed);
-	switch(speed) {
+	printf("\tlink speed:%x   - ", speed);
+	switch (speed) {
 	case 0x01:
 		printf("SupportedLink Speeds Vector filed bit 0");
-		 break;
+		break;
 	case 0x02:
 		printf("SupportedLink Speeds Vector filed bit 1");
 		break;
@@ -159,10 +168,10 @@ void linkspeed(BYTE speed)
 	printf("\n");
 }
 
-void linkwidth(BYTE width)
+void linkwidth(uint8_t width)
 {
-	printf("\tlink width:%02x - ",width);
-	switch(width) {
+	printf("\tlink width:%02x - ", width);
+	switch (width) {
 	case 0x01:
 		printf("x1");
 		break;
@@ -191,33 +200,33 @@ void linkwidth(BYTE width)
 	printf("\n");
 }
 
-int check_pcie(WORD *ptrdata, WORD bus, WORD dev, WORD fun)
+int check_pcie(uint32_t *ptrdata, uint32_t bus, uint32_t dev, uint32_t fun)
 {
-	BYTE ver = 0;
-	WORD next = 0x100, num = 0;
-	DBYTE offset = 0, cap = 0;
+	uint8_t ver = 0;
+	uint32_t next = 0x100, num = 0;
+	uint16_t offset = 0, cap = 0;
 
 	if (is_pcie == 1) {
-		cap = (DBYTE)(*(ptrdata + next/4));
-		offset = (DBYTE)(*(ptrdata + next/4) >> 20);
-		ver = (BYTE)((*(ptrdata + next/4) >> 16) & 0xf);
+		cap = (uint16_t)(*(ptrdata + next/4));
+		offset = (uint16_t)(*(ptrdata + next/4) >> 20);
+		ver = (uint8_t)((*(ptrdata + next/4) >> 16) & 0xf);
 		if ((offset == 0) | (offset == 0xfff)) {
 			printf("PCIE cap:%04x ver:%01x off:%03x|\n", cap, ver, offset);
 			return 0;
-		} else
+		}
 		printf("PCIE cap:%04x ver:%01x off:%03x|", cap, ver, offset);
 
-		while(1) {
+		while (1) {
 			num++;
-			cap = (DBYTE)(*(ptrdata + offset/4));
-			offset = (DBYTE)(*(ptrdata + offset/4) >> 20);
-			ver = (BYTE)((*(ptrdata + offset/4) >> 16) & 0xf);
+			cap = (uint16_t)(*(ptrdata + offset/4));
+			offset = (uint16_t)(*(ptrdata + offset/4) >> 20);
+			ver = (uint8_t)((*(ptrdata + offset/4) >> 16) & 0xf);
 
 			if (offset == 0) {
-				printf("cap:%04x ver:%01x off:%03x\n", cap, ver, offset);
+				printf("cap:%04x ver:%01x off:%03x|\n", cap, ver, offset);
 				break;
-			} else
-				printf("cap:%04x ver:%01x off:%03x|", cap, ver, offset);
+			}
+			printf("cap:%04x ver:%01x off:%03x|", cap, ver, offset);
 			if (num > 21) {
 				printf("PCIE num is more than 20, return\n");
 				break;
@@ -229,33 +238,33 @@ int check_pcie(WORD *ptrdata, WORD bus, WORD dev, WORD fun)
 	return 0;
 }
 
-int check_pci(WORD *ptrdata, WORD bus, WORD dev, WORD fun)
+int check_pci(uint32_t *ptrdata, uint32_t bus, uint32_t dev, uint32_t fun)
 {
-	BYTE nextpoint = 0x34;
-	WORD num = 0;
-	WORD *ptrsearch;
+	uint8_t nextpoint = 0x34;
+	uint32_t num = 0;
+	uint32_t *ptrsearch;
 
-	nextpoint = (BYTE)(*(ptrdata + nextpoint/4));
+	nextpoint = (uint8_t)(*(ptrdata + nextpoint/4));
 	ptrsearch = ptrdata + nextpoint/4;
 
 	if ((nextpoint == 0) | (nextpoint == 0xff)) {
-		printf("off:0x34->%02x|\n",nextpoint);
+		printf("off:0x34->%02x|\n", nextpoint);
 		return 0;
 	}
 	printf("off:0x34->%02x cap:%02x|",
-			nextpoint, (BYTE)(*ptrsearch));
+			nextpoint, (uint8_t)(*ptrsearch));
 
-	while(1) {
-		if((BYTE)((*ptrsearch) >> 8) == 0x00) {
-			printf("off:%02x|", (BYTE)((*ptrsearch) >> 8));
+	while (1) {
+		if ((uint8_t)((*ptrsearch) >> 8) == 0x00) {
+			printf("off:%02x|", (uint8_t)((*ptrsearch) >> 8));
 			break;
 		}
 		if (num >= 16)
 			break;
 
-		printf("off:%02x ", (BYTE)(((*ptrsearch) >> 8) & 0x00ff));
-		ptrsearch = ptrdata + ((BYTE)(((*ptrsearch) >> 8) & 0x00ff))/4;
-		printf("cap:%02x|", (BYTE)(*ptrsearch));
+		printf("off:%02x ", (uint8_t)(((*ptrsearch) >> 8) & 0x00ff));
+		ptrsearch = ptrdata + ((uint8_t)(((*ptrsearch) >> 8) & 0x00ff))/4;
+		printf("cap:%02x|", (uint8_t)(*ptrsearch));
 		num++;
 	}
 
@@ -268,15 +277,14 @@ int check_pci(WORD *ptrdata, WORD bus, WORD dev, WORD fun)
 	return 0;
 }
 
-int pci_show(WORD bus, WORD dev, WORD fun)
+int pci_show(uint32_t bus, uint32_t dev, uint32_t fun)
 {
-	WORD *ptrdata = malloc(sizeof(unsigned long) * 4096);
-	WORD addr = 0;
+	uint32_t *ptrdata = malloc(sizeof(unsigned long) * 4096);
+	uint32_t addr = 0;
 	int fd, offset;
 
 	fd = open("/dev/mem", O_RDWR);
-	if (fd < 0)
-	{
+	if (fd < 0) {
 		printf("open /dev/mem failed!\n");
 		return -1;
 	}
@@ -292,22 +300,22 @@ int pci_show(WORD bus, WORD dev, WORD fun)
 		printf("%02x:%02x.%01x:", bus, dev, fun);
 
 		if (((check_list >> 1) & 0x1) == 1) {
-			for(offset = 0; offset < 64; offset++) {
-				if(offset % 4 == 0)
+			for (offset = 0; offset < 64; offset++) {
+				if (offset % 4 == 0)
 					printf("\n%02x: ", offset * 4);
-				printf("%02x ",(BYTE)(*(ptrdata + offset) >> 0));
-				printf("%02x ",(BYTE)(*(ptrdata + offset) >> 8));
-				printf("%02x ",(BYTE)(*(ptrdata + offset) >> 16));
-				printf("%02x ",(BYTE)(*(ptrdata + offset) >> 24));
+				printf("%02x ", (uint8_t)(*(ptrdata + offset) >> 0));
+				printf("%02x ", (uint8_t)(*(ptrdata + offset) >> 8));
+				printf("%02x ", (uint8_t)(*(ptrdata + offset) >> 16));
+				printf("%02x ", (uint8_t)(*(ptrdata + offset) >> 24));
 			}
 			if (is_pcie == 1) {
-				for(offset = 64; offset < 1024; offset++) {
-					if(offset % 4 == 0)
+				for (offset = 64; offset < 1024; offset++) {
+					if (offset % 4 == 0)
 						printf("\n%02x: ", offset * 4);
-					printf("%02x ",(BYTE)(*(ptrdata + offset) >> 0));
-					printf("%02x ",(BYTE)(*(ptrdata + offset) >> 8));
-					printf("%02x ",(BYTE)(*(ptrdata + offset) >> 16));
-					printf("%02x ",(BYTE)(*(ptrdata + offset) >> 24));
+					printf("%02x ", (uint8_t)(*(ptrdata + offset) >> 0));
+					printf("%02x ", (uint8_t)(*(ptrdata + offset) >> 8));
+					printf("%02x ", (uint8_t)(*(ptrdata + offset) >> 16));
+					printf("%02x ", (uint8_t)(*(ptrdata + offset) >> 24));
 				}
 			}
 			printf("\n");
@@ -322,24 +330,49 @@ int pci_show(WORD bus, WORD dev, WORD fun)
 	return 0;
 }
 
+int recognize_pcie(uint32_t *ptrdata, uint32_t *ptrsearch)
+{
+	int loop_num = 0;
+
+	while (1) {
+		loop_num++;
+		/* 0x10 means PCIE capability */
+		if ((uint8_t)(*ptrsearch) == 0x10) {
+			is_pcie = 1;
+			break;
+		}
+		if ((uint8_t)(*ptrsearch) == 0xff)
+			return 2;
+
+		/* no PCIE find */
+		if ((uint8_t)((*ptrsearch) >> 8) == 0x00)
+			break;
+		if (loop_num >= 16)
+			break;
+		/* next capability */
+		ptrsearch = ptrdata + ((uint8_t)(((*ptrsearch) >> 8)
+				& 0x00ff))/4;
+		loop_num++;
+	}
+	return 0;
+}
+
 int scan_pci(void)
 {
-	WORD addr = 0, ptr_content = 0xffffffff;
-	WORD bus, dev, fun;
-	WORD *ptrdata = malloc(sizeof(unsigned long) * 4096);
-	WORD *ptrsearch;
-	BYTE nextpoint;
+	uint32_t addr = 0, ptr_content = 0xffffffff;
+	uint32_t bus, dev, fun, *ptrsearch;
+	uint32_t *ptrdata = malloc(sizeof(unsigned long) * 4096);
+	uint8_t nextpoint;
 
 	int fd, loop_num = 0;
 
-	fd = open("/dev/mem",O_RDWR);
+	fd = open("/dev/mem", O_RDWR);
 
-	if (fd < 0)
-	{
+	if (fd < 0) {
 		printf("open /dev/mem failed!\n");
 		return -1;
 	}
-	printf("fd=%d open /dev/mem successfully.\n",fd);
+	printf("fd=%d open /dev/mem successfully.\n", fd);
 
 	ptrdata = &ptr_content;
 	for (bus = 0; bus < MAX_BUS; ++bus) {
@@ -356,33 +389,14 @@ int scan_pci(void)
 
 				if ((*ptrdata != 0xffffffff) && (*ptrdata != 0)) {
 					/* 0x34/4 is capability pointer in PCI */
-					nextpoint = (BYTE)(*(ptrdata + 0x34/4));
+					nextpoint = (uint8_t)(*(ptrdata + 0x34/4));
 					ptrsearch = ptrdata + nextpoint/4;
 
 					is_pcie = 0;
-					loop_num = 0;
-					/* search for PCIE */
-					while(1) {
-						loop_num++;
-						/* 0x10 means PCIE capability */
-						if ((BYTE)(*ptrsearch) == 0x10) {
-							is_pcie = 1;
-							break;
-						}
-						if ((BYTE)(*ptrsearch) == 0xff) {
-							printf("Check %02x:%02x.%x cap is %02x, return\n",
-									bus, dev, fun, (BYTE)(*ptrsearch));
-							return 0;
-						}
-						/* no PCIE find */
-						if((BYTE)((*ptrsearch) >> 8) == 0x00)
-							break;
-						if (loop_num >= 16)
-							break;
-						/* next capability */
-						ptrsearch = ptrdata + ((BYTE)(((*ptrsearch) >> 8)
-								& 0x00ff))/4;
-						loop_num++;
+					if (recognize_pcie(ptrdata, ptrsearch) == 2) {
+						printf("Check %02x:%02x.%x cap is %02x, return\n",
+								bus, dev, fun, (uint8_t)(*ptrsearch));
+						return 2;
 					}
 
 					if (is_pcie == 0)
@@ -397,10 +411,10 @@ int scan_pci(void)
 						check_pci(ptrdata, bus, dev, fun);
 
 					if ((check_list & 0x1) == 1) {
-						typeshow((BYTE)(((*ptrsearch)>>20)&0x0f));
-						speedshow((BYTE)(((*(ptrsearch+0x2c/4))>>1)&0x7f));
-						linkspeed((BYTE)(*(ptrsearch+0x0c/4)&0x0f));
-						linkwidth((BYTE)(((*(ptrsearch+0x0c/4))>>4)&0x3f));
+						typeshow((uint8_t)(((*ptrsearch)>>20)&0x0f));
+						speedshow((uint8_t)(((*(ptrsearch+0x2c/4))>>1)&0x7f));
+						linkspeed((uint8_t)(*(ptrsearch+0x0c/4)&0x0f));
+						linkwidth((uint8_t)(((*(ptrsearch+0x0c/4))>>4)&0x3f));
 					}
 					if (((check_list >> 1) & 0x1) == 1)
 						pci_show(bus, dev, fun);
@@ -416,7 +430,7 @@ int scan_pci(void)
 int main(int argc, char *argv[])
 {
 	char parm;
-	WORD bus, dev, func;
+	uint32_t bus, dev, func;
 
 	if (argc == 2) {
 		if (sscanf(argv[1], "%c", &parm) != 1) {
@@ -463,6 +477,10 @@ int main(int argc, char *argv[])
 		case 'i':
 			is_pcie = 0;
 			break;
+		case 'I':
+			is_pcie = 0;
+			check_list = (check_list | 0x2);
+			break;
 		case 'e':
 			is_pcie = 1;
 			break;
@@ -479,6 +497,7 @@ int main(int argc, char *argv[])
 			printf("Invalid bus:%x", bus);
 			usage();
 		}
+
 		if (sscanf(argv[3], "%x", &dev) != 1) {
 			printf("Invalid dev:%x", dev);
 			usage();
