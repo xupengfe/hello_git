@@ -30,7 +30,7 @@ int usage(void)
 	printf("e    Show all or specific PCIE info\n");
 	printf("bus  Specific bus number(HEX)\n");
 	printf("dev  Specific device number(HEX)\n");
-	printf("func Specific function number(HEX)\n");
+	printf("func Specific function number(HEX-optional)\n");
 	exit(2);
 }
 
