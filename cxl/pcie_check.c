@@ -102,7 +102,7 @@ void typeshow(uint8_t data)
 		printf("Downstream Port of PCI Express Switch\n");
 		break;
 	case 0x07:
-		printf("PCi Express-to-PCI/PCI-x Bridge\n");
+		printf("PCI Express-to-PCI/PCI-x Bridge\n");
 		break;
 	case 0x08:
 		printf("PCI/PCI-xto PCi Express Bridge\n");
@@ -456,7 +456,7 @@ int main(int argc, char *argv[])
 		case 'i': // only check pci capability
 			check_list = (check_list | 0x8);
 			break;
-		case 'e': // only pcie capability
+		case 'e': // only check pcie capability
 			check_list = (check_list | 0x4);
 			break;
 		case 'n':
