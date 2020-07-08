@@ -222,8 +222,8 @@ int check_pcie(uint32_t *ptrdata)
 		while (1) {
 			num++;
 			cap = (uint16_t)(*(ptrdata + offset/4));
-			offset = (uint16_t)(*(ptrdata + offset/4) >> 20);
 			ver = (uint8_t)((*(ptrdata + offset/4) >> 16) & 0xf);
+			offset = (uint16_t)(*(ptrdata + offset/4) >> 20);
 
 			if (offset == 0) {
 				printf("cap:%04x ver:%01x off:%03x|\n", cap, ver, offset);
