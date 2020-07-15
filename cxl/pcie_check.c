@@ -333,10 +333,20 @@ int pci_show(uint32_t bus, uint32_t dev, uint32_t fun)
 	return 0;
 }
 
-int recognize_pcie(uint32_t *ptrdata, uint32_t *ptrsearch)
+int recognize_pcie(uint32_t *ptrdata)
 {
 	int loop_num = 0;
+	uint8_t nextpoint;
+	uint32_t *ptrsearch;
 
+	is_pcie = 0;
+	/* 0x34/4 is capability pointer in PCI */
+	nextpoint = (uint8_t)(*(ptrdata + 0x34/4));
+
+	if (nextpoint == 0)
+		return 0;
+
+	ptrsearch = ptrdata + nextpoint/4;
 	while (1) {
 		loop_num++;
 		/* 0x10 means PCIE capability */
@@ -344,8 +354,11 @@ int recognize_pcie(uint32_t *ptrdata, uint32_t *ptrsearch)
 			is_pcie = 1;
 			break;
 		}
-		if ((uint8_t)(*ptrsearch) == 0xff)
+		if ((uint8_t)(*ptrsearch) == 0xff) {
+			printf("*ptrsearch:%x offset is 0xff, ptrsearch:%p, ptrdata:%p\n",
+				*ptrsearch, ptrsearch, ptrdata);
 			return 2;
+		}
 
 		/* no PCIE find */
 		if ((uint8_t)((*ptrsearch) >> 8) == 0x00)
@@ -391,14 +404,9 @@ int scan_pci(void)
 				}
 
 				if ((*ptrdata != 0xffffffff) && (*ptrdata != 0)) {
-					/* 0x34/4 is capability pointer in PCI */
-					nextpoint = (uint8_t)(*(ptrdata + 0x34/4));
-					ptrsearch = ptrdata + nextpoint/4;
-
-					is_pcie = 0;
-					if (recognize_pcie(ptrdata, ptrsearch) == 2) {
-						printf("Check %02x:%02x.%x cap is %02x, return\n",
-								bus, dev, fun, (uint8_t)(*ptrsearch));
+					if (recognize_pcie(ptrdata) == 2) {
+						printf("%02x:%02x.%x debug:'pcie_check a %x %x %x'\n",
+								bus, dev, fun, bus, dev, fun);
 						return 2;
 					}
 
@@ -414,6 +422,8 @@ int scan_pci(void)
 						check_pci(ptrdata);
 
 					if ((check_list & 0x1) == 1) {
+						nextpoint = (uint8_t)(*(ptrdata + 0x34/4));
+						ptrsearch = ptrdata + nextpoint/4;
 						typeshow((uint8_t)(((*ptrsearch)>>20)&0x0f));
 						speedshow((uint8_t)(((*(ptrsearch+0x2c/4))>>1)&0x7f));
 						linkspeed((uint8_t)(*(ptrsearch+0x0c/4)&0x0f));
